@@ -1,0 +1,60 @@
+# Optimizing usage
+
+To avoid exceeding your plan limits, we recommend optimizing your API requests to ensure you aren't being billed for redundant, error-prone, or bad requests.
+
+### Bad requests
+
+While 50X server error codes are excluded from the requests count, [we include 4XX](https://api.circle.so/apis/admin-api/usage-and-limits) error codes since these indicate issues with the request itself.
+
+#### Empty params
+
+A common issue for 400, 422 and 404 errors is a blank or missing param.&#x20;
+
+```bash
+// good request
+GET /api/admin/v2/community_members/123
+
+// bad request
+GET /api/admin/v2/community_members/undefined
+GET /api/admin/v2/community_members
+```
+
+#### Bad token
+
+401 and 403 are also taken into account as part of your limit quota, so ensure requests include valid, non-expired authentication tokens.
+
+Tokens are type-specific as well — for example, Admin V2 tokens won't work on Headless Auth API. A wrong token type will also result in a 403.
+
+#### Method not allowed
+
+Double check your HTTP methods (GET, POST, PUT, DELETE, PATCH) to ensure you're sending through the ones allowed on each endpoint. Methods that are not allowed will result in a 405.
+
+#### Rate limit
+
+Sending a lot of requests in a small timeframe can lead to a 429 (Too Many Requests). Our [rate limit policy](#rate-limit) is generous, but when you encounter a response code 429, we recommend waiting for around 60 seconds to send through more requests.
+
+It might helpful for you to implement waits and delays in your code to avoid exceeding rate limits.
+
+### Optimizing endpoints
+
+The "Endpoints overview" section in your Developer dashboard shows you an overview of your requests broken up by endpoint.
+
+<figure><img src="https://3386231300-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FTxViy1AlkVpH99B9E7eY%2Fuploads%2FOof9X1GRdsDxW6sFzkez%2FScreenshot%202024-11-05%20at%2012.33.24%E2%80%AFPM.png?alt=media&#x26;token=0383a551-cac1-476e-a40f-514fd819617b" alt=""><figcaption></figcaption></figure>
+
+#### Single x Multiple calls
+
+When an API endpoint allows multiple params for bulk actions, we recommend using these instead of making multiple requests.\
+\
+For example, to add a member to multiple spaces or space groups, you can pass a list of space\_ids or space\_group\_ids in a single call instead of making multiple requests to add members to each space.
+
+#### Caching
+
+A caching layer on your end can help you make requests only when you need to.&#x20;
+
+For example, we recommend caching static datasets which don't change that often; i.e. spaces or community members.
+
+#### Error handling
+
+Since 4XX errors are counted towards your request limit, we recommend using a circuit breaker pattern to prevent cascading failures.
+
+For example, if the first request fails, don't perform the second request since it will likely fail too.

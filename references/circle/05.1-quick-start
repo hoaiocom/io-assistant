@@ -1,0 +1,69 @@
+# Quick start
+
+### Fetch your API token
+
+We use a token based authorization mechanism for both Member and Auth APIs.
+
+Community admins can obtain an API key by going to the **Developers -> Tokens** page in their community and selecting the type as **Headless Auth.**
+
+> IMPORTANT: You will need to use the token type \`Headless Auth\` for it to work with the Auth APIs.
+
+### Auth API
+
+#### Request&#x20;
+
+After generating your API token from the **Developers** tab, you'll need to fetch a signed in member's unique JWT token so you can make requests on their behalf with our [Member API](https://api.circle.so/apis/headless/member-api).\
+\
+To authenticate a member and receive the JWT access token, you'll need to pass one of the following params:
+
+* **community\_member\_id:** the member's Circle community member ID
+* **email:** the member's email
+* **sso\_id:** if you've setup SSO, this will likely be the user ID within your SSO auth system. For instance, a Google ID via Auth0 will look something like `"google-oauth2|106228182038999999999"`
+
+```bash
+curl -X POST "https://app.circle.so/api/v1/headless/auth_token" \
+     -H "Authorization: Bearer <API_Token>" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "email": "email@circle.co"
+         }'
+```
+
+#### Response
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiJ9.eyJjb21tdW5pdHlfaWQiOjEsImNvbW11bml0eV9tZW1iZXJfaWQiOjEsInNzb191c2VyX2lkIjoiZjdiOThlYjczZjdkMGQ0NGU0ZWE1MjYyN2JiYjVhMzkiLCJleHAiOjE3MDg1NDE1MTAsImp0aSI6ImE1MjM2ZmQzLWY4NGItNDcyYy1iNjI2LTcyYTk3YmYwZTcyOSJ9.-MY06GiyXB41dLAx_F4Eu8R4sRxq6QEjy3uLWc4Z6k8",
+  "refresh_token": "jaebyVK59l5xxAx1D4pM8H-wYyFA6gMC12RGYZcy44w",
+  "access_token_expires_at": "2022-01-01T00:00:00.000Z",
+  "refresh_token_expires_at": "2022-01-01T00:00:00.000Z",
+  "community_member_id": 1,
+  "community_id": 1
+}
+```
+
+This response includes:
+
+1. `access_token`: A JWT token used for authenticating subsequent API requests.
+2. `refresh_token`: A token used to obtain a new access token when the current one expires.
+3. `access_token_expires_at`: The expiration timestamp for the access token. It expires after 1h.
+4. `refresh_token_expires_at`: The expiration timestamp for the refresh token. It expires after 1 month.
+5. `community_member_id`: The ID of the community member associated with this token.
+6. `community_id`: The ID of the community the member belongs to.
+
+### Member API
+
+Once you've retreived the member's `access_token,` you can make requests on their behalf to the Headless Member API. For example:
+
+```bash
+curl -X GET "https://app.circle.so/api/headless/v1/home?page=2&per_page=20&sort=popular" \
+     -H "Authorization: Bearer <access_token>" \
+     -H "Content-Type: application/json"
+     
+```
+
+For a full list of member API endpoints, [click here](https://api-headless.circle.so/?urls.primaryName=Member%20APIs).
+
+### Feedback
+
+To reach out to our API engineering team with feedback or requests, [please use this form](https://circleco.typeform.com/to/xFEpyITZ#email=xxxxx\&visitor=xxxxx).

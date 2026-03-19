@@ -1,0 +1,54 @@
+# Usage and limits
+
+### API Usage
+
+Each eligible plan has an allotted number of Admin API requests, with higher-tier plans offering increased request limits. This gives you more flexibility as your needs grow.
+
+#### Plans
+
+* Business - 5,000 requests/month
+* Enterprise and Circle Plus - 30,000 requests/month
+* Circle Plus Platform - 250,000 requests/month
+
+**Note that Zapier usage does not count towards these limits.**
+
+You can monitor your usage by going to the **Developers** tab in your admin area.
+
+If you exceed your limits over the next few months, don’t worry: we won’t be enforcing our API limits until **January 1, 2025** so you have time to establish a baseline and upgrade your plan if needed.&#x20;
+
+#### Rate limits
+
+To prevent attacks and/or abuses, there's a rate limiting mechanism in place on all of Circle's APIs. The limit is **2000 request per 5 minutes per IP.  That number can change at any time.**\
+\
+It's important to note that this limit is quite generous compared to other API providers. As a best practice, when you receive a 429 (Too Many Requests) response, implement a backoff strategy by pausing your script and retrying later, ensuring that your requests are within the rate limit.
+
+### FAQ
+
+<details>
+
+<summary>Why isn't my API usage count updated immediately after making API requests?</summary>
+
+API usage counts are not updated in real-time due to backend processing. We cache the usage count for one minute on our side, so you can expect the count to be updated \~5min after performing that call.
+
+</details>
+
+<details>
+
+<summary>Which response codes are considered as part of my limit?</summary>
+
+We consider API requests with the following response codes for updating the API usage count:
+
+200: OK \
+201: Created\
+204: No Content\
+400: Bad Request\
+401: Unauthorized\
+403: Forbidden\
+404: Not Found\
+405: Method Not Allowed\
+422: Unprocessable Entity\
+429: Too Many Requests
+
+Any 500 or other internal server errors are not computed and will not count as a request.
+
+</details>

@@ -1,0 +1,42 @@
+# Spaces & space groups
+
+A space is both a container of content, and the access gating mechanism through which members access this content.
+
+### Spaces
+
+#### Access
+
+* **Public**: The sidebar link is visible to everyone in the community, and the space is accessible to all community members.
+* **Private**: The sidebar link is visible to members in the community, but the space is accessible only to members who've been added to it.
+* **Secret**: The sidebar link is hidden from members in the community unless a member belongs to the space, and the space is accessible only to members who've been added to it.
+
+#### Type
+
+Each space is defined by its **space type**, which defines its primary content and functionality. Here's an example of a TypeScript definition:
+
+```typescript
+type SpaceType = 'basic' | 'chat' | 'event' | 'course' | 'members' | 'image';
+```
+
+* **Basic**:
+  * Contains regular posts, serving as a general-purpose space for posts and discussions.
+  * Use cases: General discussions, announcements, topic-specific conversations, or blog-like content.
+* **Chat**:
+  * Functions as a chat room, allowing multiple participants to engage in real-time conversations.
+  * Use cases: Real-time support, casual conversations, quick team check-ins, or live Q\&A sessions.
+* **Event**:
+  * Functions as a container for upcoming and past events.
+  * Use cases: Webinars, meetups, conference planning, or virtual event hosting.
+* **Course**:
+  * Functions as a container on course lessons.
+  * Use cases: Online classes, training programs, tutorial series, or self-paced learning modules.
+* **Members**:
+  * Functions as a container for a specific member directory.
+  * Use cases: Networking, member spotlights, expertise directories, or team rosters.
+* **Image**:
+  * Functions as a container for images.
+  * Use cases: Photo galleries, visual portfolios, product showcases, or inspirational mood boards.
+
+## Space groups
+
+Space groups are the grouping container of multiple spaces in the sidebar, and include meta settings. A Space Group can contain spaces of different types and access levels.

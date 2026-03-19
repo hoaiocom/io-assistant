@@ -1,0 +1,89 @@
+# Best Practices
+
+When integrating with our Admin APIs, it’s important to implement them in a way that scales efficiently as your community grows. Rather than relying on frequent polling—which can cause excessive usage, increased costs, and degraded performance—there are more effective ways to build your workflows.
+
+This guide outlines best practices to help you reduce unnecessary Admin API calls and make the most of your integration.
+
+***
+
+### 🔁 Use Built-in Workflows
+
+Our native Workflows feature allows you to build automations that respond to real-time platform events—without writing code or polling the API.
+
+#### Why use workflows?
+
+* React to user or content changes immediately
+* Eliminate repetitive, manual API requests
+* Configure visually through your admin dashboard
+
+> Example: Trigger a webhook when a new member joins or when a new post is published.
+
+***
+
+### 🔔 Webhooks: The Better Alternative to Polling
+
+When external tools need updates, webhooks are ideal. They notify your system automatically when relevant events occur.
+
+**Benefits of using webhooks:**
+
+* Event-driven and resource-friendly
+* Significantly reduces unnecessary API requests
+* Easily integrates with webhook-compatible tools
+
+> You can configure webhook actions directly within workflows for seamless automation.
+
+***
+
+### ⚙️ Smarter Polling Strategies (If Necessary)
+
+If you’re using platforms that don’t support webhooks (like certain no-code tools), and polling is your only option, follow these tips:
+
+* ⏱ Increase polling intervals
+
+  (e.g., poll hourly instead of every few minutes)
+* 🧭 Stagger requests across endpoints
+
+  Avoid hitting all resources at once—space out your calls.
+* ⏰ Limit to active business hours
+
+  Focus on times when meaningful data changes are most likely.
+
+***
+
+### 🧠 Advanced Usage Controls
+
+For more complex or high-traffic integrations, apply these best practices:
+
+* 🗃 Cache responses when possible
+
+  Avoid repeat calls for data that hasn’t changed.
+* 🔗 Batch multiple requests into one
+
+  Use supported batch APIs to minimize round-trips.
+* 📊 Monitor usage and enforce rate limits
+
+  Add safeguards to prevent unexpected traffic spikes.
+
+***
+
+### 🤝 Zapier: No Usage Cost for Admin v1
+
+For no-code automations, Zapier is a preferred option:
+
+> ✅ Admin v1 API usage through Zapier is excluded from your API quota.
+
+This makes Zapier a great choice for building automations that are:
+
+* Cost-efficient
+* Event-driven
+* Easy to set up
+
+***
+
+### 🚫 Common Mistakes to Avoid
+
+Avoid these common integration issues:
+
+* ❌ Making repeated or looped API calls for the same data
+* ❌ Fetching entire datasets instead of using filters or pagination
+* ❌ Polling too frequently without checking for data changes

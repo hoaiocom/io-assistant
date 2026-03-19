@@ -1,0 +1,306 @@
+# TipTap editor
+
+Circle has chosen TipTap as the foundation for its text editor, used across posts, comments, and messages. You will usually find it under `tiptap_body` property inside posts or as the content of a message.
+
+### Blocks
+
+TipTap's foundation is based on the concept of **blocks.** A block a self-contained unit of content that has it's own structure, formatting, and functionality.&#x20;
+
+**Examples**
+
+* A paragraph of text
+* An image
+* A video embed
+* A quote or testimonial
+* A list (ordered or unordered)
+* A custom interactive element (like a poll)
+
+### Available blocks
+
+Circle has a few TipTap blocks ready to be used out-of-the-box.
+
+```typescript
+{
+  type:
+    | 'doc'
+    | 'paragraph'
+    | 'heading'
+    | 'blockquote'
+    | 'orderedList'
+    | 'bulletList'
+    | 'image'
+    | 'text'
+    | 'hardBreak'
+    | 'mention'
+    | 'listItem'
+    | 'embed'
+    | 'codeBlock'
+    | 'horizontalRule'
+    | 'file'
+    | 'entity'
+    | 'poll'
+}
+```
+
+* **Paragraph**<br>
+
+  ```json
+  {
+    "type": "paragraph",
+    "content": [
+        {
+            "text": "This is a paragraph",
+            "type": "text",
+            "circle_ios_fallback_text": "This is a paragraph"
+        }
+    ]
+  }
+  ```
+* **Heading level 2**<br>
+
+  ```json
+  {
+    "type": "heading",
+    "attrs": {
+        "level": 2
+    },
+    "content": [
+        {
+            "text": "This is 2nd level heading",
+            "type": "text",
+            "circle_ios_fallback_text": "This is 2nd level heading"
+        }
+    ]
+  }
+  ```
+* **Heading level 3**<br>
+
+  ```json
+  {
+    "type": "heading",
+    "attrs": {
+        "level": 3
+    },
+    "content": [
+        {
+            "text": "This is 3rd level heading",
+            "type": "text",
+            "circle_ios_fallback_text": "This is 2nd level heading"
+        }
+    ]
+  }
+  ```
+* **Bulleted list**<br>
+
+  ```json
+  {
+    "type": "bulletList",
+    "content": [
+        {
+            "type": "listItem",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "text": "This is a bullet list and this is item 1",
+                            "type": "text"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "listItem",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "text": "This is item 2",
+                            "type": "text"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+  }
+  ```
+* **Numbered list**<br>
+
+  ```json
+  {
+    "type": "orderedList",
+    "attrs": {
+        "start": 1
+    },
+    "content": [
+        {
+            "type": "listItem",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "text": "This is a number list and this is item 1",
+                            "type": "text"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "listItem",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "text": "This is item 2 in the list",
+                            "type": "text"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+  }
+  ```
+* **Blockquote**<br>
+
+  ```json
+  {
+    "type": "blockquote",
+    "content": [
+        {
+            "type": "paragraph",
+            "content": [
+                {
+                    "text": "This is a blockquote",
+                    "type": "text"
+                }
+            ]
+        }
+    ]
+  }
+  ```
+* **Embeds (Youtube, Vimeo, Wistia etc)**<br>
+
+  ```json
+  {
+    "type": "embed",
+    "attrs": {
+        "sgid": "BAh7CEkiCGdpZAY6BkVUSSI1Z2lkOi8vanVtcHN0YXJ0LWFwcC9SaWNoVGV4dE9lbWJlZC81MT9leHBpcmVzX2luBjsAVEkiDHB1cnBvc2UGOwBUSSIUcmljaF90ZXh0X2ZpZWxkBjsAVEkiD2V4cGlyZXNfYXQGOwBUMA==--8c4d9e538b2a988746e77e96dcf048616db6962d"
+    }
+  }
+  ```
+
+  Metadata required to render will be sent in `sgid_to_object_map`
+* **Image embeds**<br>
+
+  ```json
+  {
+    "type": "image",
+    "attrs": {
+        "url": "<http://test.circledev.net:5000/rails/active_storage/blobs/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBZnM9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--3dd03246287b040de40d07d9e81a57cc9baa1b4c/JgOeRuGD_Y4>",
+        "width": "100%",
+        "alignment": "center", // enum ["center"|"left"|"right"]
+        "signed_id": "eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBZnM9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--3dd03246287b040de40d07d9e81a57cc9baa1b4c",
+        "content_type": "image/jpeg"
+    }
+  }
+  ```
+
+  Metadata required to render will be sent in `inline_attachments`&#x20;
+* **CodeBlocks**<br>
+
+  ```json
+  {
+    "type": "codeBlock",
+    "attrs": {
+       "language": "javascript"
+    },
+    "content":[
+       {
+         "text":"console.log('Hey!');",
+         "type":"text",
+         "circle_ios_fallback_text":"console.log('Hey!');"
+       }
+    ]
+  }
+  ```
+* **Horizontal Rule**
+
+  ```json
+  {
+    "type": "horizontalRule",
+  }
+  ```
+* **Mention (inside a paragraph)**
+
+  ```json
+  {
+     "type":"paragraph",
+     "content":[
+        {
+           "type":"text",
+           "text":""
+        },
+        {
+           "type":"mention",
+           "attrs":{
+              "sgid":"some-sgid"
+           },
+           "circle_ios_fallback_text":"@John Doe"
+        },
+        {
+           "type":"text",
+           "text":" and some text"
+        }
+     ]
+  }
+  ```
+* More to come
+
+## Understanding SGIDs in TipTap Blocks
+
+### What is SGID?
+
+The **sgid** (Signed Global ID) attribute is a crucial component in TipTap blocks as it identifies elements within a block, such as an image, a file or even an user mention.
+
+It acts as a pointer to specific metadata within the block, so the `sgid` value corresponds to an entry in the `sgids_to_object_map`, where the more detailed metadata is present
+
+### How It Works
+
+1. Within a TipTap block, you'll find an `attrs.sgid` value.
+2. To retrieve the associated metadata:
+   * Look up this `sgid` value in the `sgids_to_object_map` object.
+   * The corresponding entry provides detailed information about the referenced item.
+
+### Example Usage
+
+```javascript
+javascriptCopy// TipTap block with an sgid
+const block = {
+  type: "image",
+  attrs: {
+    sgid: "BAh7CEkiCGdpZAY6BkVUSSIrZ2lkOi8vY2lyY2xlL0F0dGFjaG1lbnQvMTIzP2V4cGlyZXNfaW4GOwBUSSIMcHVycG9zZQY7AFRJIg9hdHRhY2hhYmxlBjsAVEkiD2V4cGlyZXNfYXQGOwBUMA==",
+    // other attributes...
+  }
+};
+
+// Corresponding entry in sgids_to_object_map
+const sgids_to_object_map = {
+  "BAh7CEkiCGdpZAY6BkVUSSIrZ2lkOi8vY2lyY2xlL0F0dGFjaG1lbnQvMTIzP2V4cGlyZXNfaW4GOwBUSSIMcHVycG9zZQY7AFRJIg9hdHRhY2hhYmxlBjsAVEkiD2V4cGlyZXNfYXQGOwBUMA==": {
+    id: 123,
+    filename: "example.jpg",
+    content_type: "image/jpeg",
+    // other metadata...
+  }
+};
+
+// Retrieving metadata
+const metadata = sgids_to_object_map[block.attrs.sgid];
+console.log(metadata); // Outputs the detailed information about the image
+```

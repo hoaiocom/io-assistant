@@ -1,0 +1,102 @@
+# Quick start
+
+### Authentication
+
+The admin API uses **token-based authentication**.
+
+Your unique API token identifies your community within Circle's server and enables you to perform administrative tasks, such as handling community data or generating new content.
+
+Community admins can obtain an API key by going to the **Developers -> Tokens** page in their community and selecting the type as **Admin V1 or V2**. Also, we recommend reading through the [API Docs here](https://api-headless.circle.so/?urls.primaryName=Admin%20APIs#/).
+
+#### Request headers
+
+After getting your API token, you can pass it as a header parameter with every request you make to the admin API:
+
+```json
+{
+    "Authorization": "Bearer <API_Token>",
+    "Content-Type": "application/json"
+}
+```
+
+### Performing a request
+
+As an example, if you'd like to retrieve all posts for a specific space, you can use the following endpoint with the space's unique identifier. In this instance, posts are being fetched within the space ID `999`:
+
+```sh
+curl -X GET "https://app.circle.so/api/admin/v2/comments/posts?space_id=999&page=1&per_page=20&status=published" \
+     -H "Authorization: Bearer <API_Token>" \
+     -H "Content-Type: application/json"
+```
+
+This request also contains parameters like `page`, `per_page` and `status:`
+
+```json
+// simplified version of Posts just 
+{
+  "page": 1,
+  "per_page": 20,
+  "has_next_page": false,
+  "count": 3,
+  "page_count": 1,
+  "records": [
+    {
+      "id": 1001,
+      "status": "published",
+      "name": "Welcome to Our Product Space",
+      "slug": "welcome-to-our-product-space",
+      "body": {
+        "id": 1001,
+        "body": "<p>Welcome to the product discussion space! Here we'll share updates and gather feedback.</p>",
+        "created_at": "2024-09-01T09:00:00.000Z",
+        "updated_at": "2024-09-01T09:00:00.000Z"
+      },
+      "url": "https://app.circle.so/c/product-space/welcome-to-our-product-space",
+      "space_name": "Product Space",
+      "space_id": 999,
+      "user_name": "Product Manager",
+      "comments_count": 15,
+      "published_at": "2024-09-01T09:00:00.000Z",
+      "likes_count": 32
+    },
+    {
+      "id": 1002,
+      "status": "published",
+      "name": "New Feature Announcement",
+      "slug": "new-feature-announcement",
+      "body": {
+        "id": 1002,
+        "body": "<p>We're excited to announce our latest feature: AI-powered recommendations!</p>",
+        "created_at": "2024-09-05T14:30:00.000Z",
+        "updated_at": "2024-09-05T14:30:00.000Z"
+      },
+      "url": "https://app.circle.so/c/product-space/new-feature-announcement",
+      "space_name": "Product Space",
+      "space_id": 999,
+      "user_name": "Development Lead",
+      "comments_count": 28,
+      "published_at": "2024-09-05T14:30:00.000Z",
+      "likes_count": 45
+    },
+    {
+      "id": 1003,
+      "status": "published",
+      "name": "Upcoming Maintenance Schedule",
+      "slug": "upcoming-maintenance-schedule",
+      "body": {
+        "id": 1003,
+        "body": "<p>Please be aware of our upcoming maintenance window this Saturday from 2 AM to 4 AM EST.</p>",
+        "created_at": "2024-09-08T11:00:00.000Z",
+        "updated_at": "2024-09-08T11:00:00.000Z"
+      },
+      "url": "https://app.circle.so/c/product-space/upcoming-maintenance-schedule",
+      "space_name": "Product Space",
+      "space_id": 999,
+      "user_name": "Support Team",
+      "comments_count": 7,
+      "published_at": "2024-09-08T11:00:00.000Z",
+      "likes_count": 12
+    }
+  ]
+}
+```

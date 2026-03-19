@@ -1,0 +1,191 @@
+# Methods
+
+The Headless Auth SDK is composed of the following methods:
+
+[getMemberAPITokenFromCommunityMemberId](#getmemberapitokenfromcommunitymemberid)
+
+[getMemberAPITokenFromEmail](#getmemberapitokenfromemail)
+
+[getMemberAPITokenFromSSOId](#getmemberapitokenfromssoid)
+
+[getMemberAPITokenFromRefreshToken](#getmemberapitokenfromrefreshtoken)
+
+[revokeRefreshToken](#revokerefreshtoken)
+
+[revokeMemberAPIToken](#revokememberapitoken)
+
+## getMemberAPITokenFromCommunityMemberId
+
+This function obtains a member `access_token` and `refresh_token` based on the community member's ID.&#x20;
+
+### Request
+
+```
+const response = await client.getMemberAPITokenFromCommunityMemberId(MemberID);
+```
+
+### Accepted parameters
+
+`memberID` - The Community Member ID. <mark style="color:red;">Required</mark>
+
+### Response
+
+```json5
+{
+    refresh_token: 'refresh_token',
+    refresh_token_expires_at: '2024-04-14T16:39:57.000Z',
+    community_member_id: 0000000,
+    community_id: 00000,
+    access_token: 'access_token',
+    access_token_expires_at: '2024-03-20T16:54:47.274Z'
+}
+```
+
+***
+
+## getMemberAPITokenFromEmail
+
+This function obtains a member `access_token` and `refresh_token` based on the community member's Email.&#x20;
+
+### Request
+
+```
+const response = await client.getMemberAPITokenFromEmail(email@community.com)
+```
+
+### Accepted parameters
+
+`email` - The Community Member Email. <mark style="color:red;">Required</mark>
+
+### Response
+
+```json5
+{
+    refresh_token: 'refresh_token',
+    refresh_token_expires_at: '2024-04-14T16:39:57.000Z',
+    community_member_id: 0000000,
+    community_id: 00000,
+    access_token: 'access_token',
+    access_token_expires_at: '2024-03-20T16:54:47.274Z'
+}
+```
+
+***
+
+## getMemberAPITokenFromSSOId
+
+This function obtains a member `access_token` and `refresh_token` based on the member's SSO (Single Sign-On) ID.
+
+### Request
+
+```javascript
+const response = await client.getMemberAPITokenFromSSOId(SSOID);
+```
+
+### Accepted parameters
+
+`SSOID` - The member ID that matches the one in your SSO. <mark style="color:red;">Required</mark>
+
+### Response
+
+```json5
+{
+    refresh_token: 'refresh_token',
+    refresh_token_expires_at: '2024-04-14T16:39:57.000Z',
+    community_member_id: 0000000,
+    community_id: 00000,
+    access_token: 'access_token',
+    access_token_expires_at: '2024-03-20T16:54:47.274Z'
+}
+```
+
+***
+
+## getMemberAPITokenFromRefreshToken
+
+This function obtains a new member `access_token` by providing the member's `refresh_token`. A new token can be generated once the current one is expired.
+
+### Request
+
+```javascript
+const response = await client.getMemberAPITokenFromRefreshToken(refreshToken);
+```
+
+### Accepted parameters
+
+`refreshToken` - the refresh token received from [`getMemberAPITokenFromSSOId`](#getmemberapitokenfromssoid). <mark style="color:red;">Required</mark>
+
+### Response
+
+```json5
+{
+    access_token: "newAccessToken",
+    access_token_expires_at: "2024-03-20T16:55:50.727Z"
+}
+```
+
+***
+
+## revokeRefreshToken
+
+Revokes a member's `refresh_token`, making it unusable for generating new `access_token`.
+
+### Request
+
+```javascript
+const response = await client.revokeRefreshToken(refreshToken);
+```
+
+### Accepted parameters
+
+`refreshToken` - the refresh token to be revoked. <mark style="color:red;">Required</mark>
+
+### Response
+
+on a successful request
+
+```json5
+null
+```
+
+on a failed request
+
+```json5
+{
+    success: false,
+    message: "Message"
+}
+```
+
+***
+
+## revokeMemberAPIToken
+
+Revokes a member's `access_token`, making it unusable for future authenticated requests.
+
+### Request
+
+```javascript
+const response = await client.revokeMemberAPIToken(accessToken);
+```
+
+### Accepted parameters
+
+`accessToken` - the member access token to be revoked. <mark style="color:red;">Required</mark>
+
+### Response
+
+on a successful request
+
+```json5
+null
+```
+
+on a failed request
+
+```json5
+{
+    success: false,
+    message: "Message"
+}
+```

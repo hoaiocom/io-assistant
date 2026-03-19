@@ -1,0 +1,12 @@
+# Member API
+
+<figure><img src="https://3386231300-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FTxViy1AlkVpH99B9E7eY%2Fuploads%2Fgjs3tqrEJSlbFV8nvNhS%2FMember%20API.jpg?alt=media&#x26;token=2bf492ef-8c5a-445a-8569-9095074c14b7" alt=""><figcaption></figcaption></figure>
+
+You can use the member API to perform member-authenticated actions for creating and retreiving posts, comments, events, notifications, chat spaces, and more.
+
+For a full list of member API endpoints, [click here](https://api-headless.circle.so/?urls.primaryName=Member%20APIs).
+
+### Feedback
+
+* If you have general questions or want to share your creations with the developer community, please check out our [Developer community space](https://community.circle.so/c/developers/).&#x20;
+* If you have API feedback for our engineering team, [please use this form](https://circleco.typeform.com/to/xFEpyITZ#email=xxxxx\&visitor=xxxxx) to reach out to us.

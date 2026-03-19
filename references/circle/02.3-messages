@@ -1,0 +1,120 @@
+# Messages
+
+### Chat Rooms
+
+A Chat Room is the shared container for all real-time chat conversations in Circle.
+
+#### Kind
+
+There are two kinds of Chat Rooms:
+
+```typescript
+type ChatRoomKind = 'direct' | 'group_chat'
+```
+
+* **direct** - for one-on-one conversations
+* **group\_chat** - for rooms with multiple people
+
+#### Embedded rooms
+
+A Chat Room can be embedded in a course lesson, live room, or a space:
+
+* **Course Lesson**:&#x20;
+  * When a Chat Room belongs to a Lesson for course comments, you’ll see an additional `course_lesson` attribute denoting the lesson ID.
+* **Live Room**:&#x20;
+  * When a Chat Room belongs to a Live Room for chat in a live stream, you’ll see an additional `parent` attribute denoting the live room ID.
+* **Space**:&#x20;
+  * When a Chat Room belongs to a Space as a chat space, you’ll see an additional `parent` attribute denoting the live room ID.
+
+#### Structure
+
+```typescript
+interface ChatRoom {
+  id: number;
+  uuid: string;
+  community_id: number;
+  identifier: string;
+  kind: 'direct' | 'group_chat';
+  name: string;
+  description: string | null;
+  is_embedded: boolean;
+  show_history: boolean;
+  last_message_id: number | null;
+  pinned_message_id: number | null;
+  parent_id: number | null;
+  parent_type: string | null;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+  community: Community;
+  // available when part of a Course Lesson
+  course_lesson?: CourseLesson;
+  chat_room_messages: ChatRoomMessage[];
+  chat_threads: ChatThread[];
+  chat_room_participants: ChatRoomParticipant[];
+  pinned_chat_rooms: PinnedChatRoom[];
+  community_members: CommunityMember[];
+  reported_participants: ReportedParticipant[];
+  direct_chat_room_identifier?: DirectChatRoomIdentifier;
+  last_message?: ChatRoomMessage;
+  pinned_message?: ChatRoomMessage;
+  // available only when the room is inside a LiveRoom or a Space (chat space)
+  parent?: Space | LiveRoom;
+}
+```
+
+### Chat Room Message
+
+A ChatRoomMessage represents a single message within a chat room. It is always attached to a ChatRoom and a participant.
+
+#### Threads/Replies
+
+A message can contain **replies**, or be a **reply** to another message. When a message contains replies, this is called a Thread.
+
+* The attribute `parentMessageId` tells you if that message you are looking at is part of a thread.
+* The attribute `hasReplies` tells you if that message has any nested replies.
+
+#### Structure
+
+```typescript
+interface ChatRoomMessage {
+  id: number
+  chat_room_id: number
+  chat_room_uuid: string
+  chat_room_participant_id: number
+  body: string
+  bookmark_id: number | null
+  // uses TipTap, similar to Posts but a simplified version
+  rich_text_body?: TipTapRichBodyText
+  sent_at: string
+  created_at: string
+  updated_at: string | null
+  deleted_at: string | null
+  edited_at?: string | null
+  embedded: false
+  chat_thread_id?: number
+  reactions: ChatMessageReaction[]
+  creation_uuid?: string
+  sender: {
+    id: number
+    name: string
+    community_member_id: number
+    user_public_uid: string
+    avatar_url: string
+  }
+  thread_participant_avatar_urls: string[]
+  parent_message_id: number | null
+  replies_count: number
+  total_thread_participants_count: number
+  thread_participants_preview?: OtherParticipant[]
+  chat_thread_replies_count: number
+}
+
+type ReactionEmoji = 'thumbsup' | 'heart' | 'joy' | 'open_mouth' | 'cry' | 'pray' | 'tada'
+
+type ChatMessageReaction = {
+  emoji: ReactionEmoji
+  count: number
+  community_member_ids: number[]
+}
+```

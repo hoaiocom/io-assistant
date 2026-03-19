@@ -1,0 +1,166 @@
+# Rich Text Body
+
+## Rich Text Body Format Documentation
+
+For certain API endpoints like creating a chat room message API, we expect a message body in `rich_text_body`.
+
+This document explains how to structure rich text content in the API, including text, links, mentions, and attachments.
+
+### Basic Structure
+
+The rich text body follows a nested JSON structure with a root object containing a `body` field:
+
+```json
+{
+  "body": {
+    "type": "doc",
+    "content": [
+      // Content nodes go here
+    ]
+  }
+}
+```
+
+### Content Types
+
+#### 1. Plain Text
+
+To include plain text, use a paragraph node with text content:
+
+```json
+{
+  "type": "paragraph",
+  "content": [
+    {
+      "type": "text",
+      "text": "Your message here"
+    }
+  ]
+}
+```
+
+#### 2. Links
+
+To add a link, include the link attributes in the `marks` array:
+
+```json
+{
+  "type": "text",
+  "marks": [
+    {
+      "type": "link",
+      "attrs": {
+        "href": "https://www.circle.so",
+        "target": "_blank"
+      }
+    }
+  ],
+  "text": "https://www.example.com"
+}
+```
+
+#### 3. Mentions
+
+To mention a user, use the mention type with their SGID:
+
+```json
+{
+  "type": "mention",
+  "attrs": {
+    "sgid": "BAh7CEkiCGdpZAY6BkVUSSI7Z2lkOi8v..." // User's SGID
+  }
+}
+```
+
+#### 4. Line Breaks
+
+To add a line break, use the hardBreak type:
+
+```json
+{
+  "type": "hardBreak"
+}
+```
+
+#### 5. Attachments
+
+To include attachments, add an `attachments` array at the root level with signed IDs:
+
+```json
+{
+  "body": {
+    "type": "doc",
+    "content": [
+      // Content nodes
+    ]
+  },
+  "attachments": [
+    "eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaH..." // Signed ID from direct upload
+  ]
+}
+```
+
+### Complete Example
+
+Here's a complete example that combines multiple elements:
+
+```json
+{
+  "body": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello "
+          },
+          {
+            "type": "mention",
+            "attrs": {
+              "sgid": "BAh7CEkiCGdpZAY6BkVUSSI7Z2lkOi8v..."
+            }
+          },
+          {
+            "type": "text",
+            "text": ", please check "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "link",
+                "attrs": {
+                  "href": "https://www.circle.so",
+                  "target": "_blank"
+                }
+              }
+            ],
+            "text": "this link"
+          }
+        ]
+      }
+    ]
+  },
+  "attachments": [
+    "eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaH..."
+  ]
+}
+```
+
+### Important Notes
+
+1. All content must be wrapped in a paragraph node
+2. Links require both `href` and `target` attributes
+3. Mentions require a valid SGID
+4. Attachments must be uploaded separately first to obtain signed IDs
+5. Line breaks can be added between any content nodes using `hardBreak` type
+
+### Tips for Implementation
+
+1. Always validate the JSON structure before sending
+2. Ensure all SGIDs for mentions are valid and current
+3. Verify that attachment signed IDs are obtained from the direct upload endpoint
+4. Test the content rendering with various combinations of elements
+5. Handle line breaks appropriately for proper message formatting

@@ -1,0 +1,203 @@
+# Community Member Search
+
+### API Endpoint
+
+```bash
+POST /api/headless/v1/search/community_members
+```
+
+### Request Parameters
+
+| Parameter                | Type    | Required | Description                                            |
+| ------------------------ | ------- | -------- | ------------------------------------------------------ |
+| `filters`                | Array   | No       | Array of filter objects                                |
+| `search_text`            | String  | No       | Free text search across member profiles                |
+| `per_page`               | Integer | No       | Number of results per page                             |
+| `search_after`           | Array   | No       | Cursor for pagination beyond 10K records               |
+| `order`                  | String  | No       | Sort order: "oldest", "alphabetical", "latest", "role" |
+| `status`                 | String  | No       | Filter by status: "active" or "inactive"               |
+| `exclude_empty_profiles` | Boolean | No       | When true, excludes profiles with no data              |
+| `exclude_empty_name`     | Boolean | No       | When true, excludes profiles with no name              |
+
+### Building Filters
+
+Each filter in the `filters` array follows this structure:
+
+```json
+{
+  "key": "string",              // Required
+  "filter_type": "string",      // Optional
+  "profile_field_type": "string", // Optional, for custom fields
+  "profile_field_id": "string", // Optional, for custom fields
+  "value": "string",           // Optional
+  "gte": "integer",            // Optional, for range queries
+  "lte": "integer"             // Optional, for range queries
+}
+```
+
+#### Available Filter Types
+
+* `"is"` - Exact match
+* `"is_not"` - Exclude exact match
+* `"contains"`  - Partial match
+* `"does_not_contain"`  - Exclude partial match
+* `"gt"` - Greater than
+* `"lt"`  - Less than
+* `"eq"` - Equals to
+
+### Filter Examples
+
+#### Basic Profile Fields
+
+```json
+{
+  "filters": [
+    {
+      "key": "name",
+      "filter_type": "is",
+      "value": "John Doe"
+    },
+    {
+      "key": "email",
+      "filter_type": "is",
+      "value": "john@example.com"
+    },
+    {
+      "key": "headline",
+      "filter_type": "contains",
+      "value": "developer"
+    }
+  ]
+}
+```
+
+#### Custom Profile Fields
+
+```json
+{
+  "filters": [
+    {
+      "key": "profile_field",
+      "filter_type": "is",
+      "profile_field_type": "text",
+      "profile_field_id": "123",
+      "value": "Software Engineer"
+    },
+    {
+      "key": "profile_field",
+      "profile_field_type": "checkbox",
+      "profile_field_id": "456",
+      "value": "true"
+    }
+  ]
+}
+```
+
+#### Activity Score Range
+
+```json
+{
+  "filters": [
+    {
+      "key": "activity_score",
+      "gte": 5,
+      "lte": 7
+    }
+  ]
+}
+```
+
+### Cursor-based Pagination
+
+For datasets larger than 10K records, use cursor-based pagination with `search_after`.
+
+#### Initial Request
+
+```json
+{
+  "filters": [
+    {
+      "key": "role",
+      "value": "Member"
+    }
+  ],
+  "per_page": 20
+}
+```
+
+#### Response
+
+```json
+{
+  "data": [...],
+  "next_search_after": ["1463538857"],
+  "total_count": 15000
+}
+```
+
+#### Next Page Request
+
+```json
+{
+  "filters": [
+    {
+      "key": "role",
+      "value": "Member"
+    }
+  ],
+  "per_page": 20,
+  "search_after": ["1463538857"]
+}
+```
+
+### Combining Filters with Pagination
+
+```json
+{
+  "filters": [
+    {
+      "key": "name",
+      "filter_type": "contains",
+      "value": "John"
+    },
+    {
+      "key": "profile_field",
+      "filter_type": "is",
+      "profile_field_type": "text",
+      "profile_field_id": "123",
+      "value": "Engineer"
+    }
+  ],
+  "exclude_empty_profiles": true,
+  "status": "active",
+  "per_page": 20,
+  "search_after": ["1463538857"]
+}
+```
+
+### Best Practices
+
+1. **Filter Combinations**
+   * Combine multiple filters to create precise queries
+   * Use text filters (`contains`) for broader matches
+   * Use exact matches (`is`) for specific fields like email
+2. **Pagination**
+   * Use `search_after` for datasets larger than 10K records
+   * Keep track of the `next_search_after` value for subsequent requests
+   * Start a new query without `search_after` if filters change
+3. **Performance**
+   * Keep filter combinations reasonable
+   * Use `search_text` for general searches across all fields
+   * Specify exact fields when possible for better performance
+
+### Common Issues
+
+1. **Invalid Search After**
+   * If `search_after` becomes invalid, start a new query without it
+   * Always use the most recent `next_search_after` value
+2. **No More Results**
+   * When `next_search_after` is not in the response, you've reached the end
+   * Start a new query if you need to change filters
+3. **Filter Combinations**
+   * Some filter types may not be available for all fields
+   * Check the field type before applying specific filters

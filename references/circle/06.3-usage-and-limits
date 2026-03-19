@@ -1,0 +1,16 @@
+# Usage and limits
+
+For Headless APIs, the usage is based on MAUs (Monthly Active Users). \
+\
+MAU is the number of unique users (with uniqueness defined by the user-ID) that create or consume content on Circle servers through SDK or API within a monthly billing cycle. All service requests except authentication\* are counted as MAU. MAU number is based on per-user instead of per-device, meaning that a user with the same user-ID with multiple devices will be counted as 1 MAU.
+
+### Exceptions
+
+Authentication endpoints are not taken into account, so you can use them without increasing your MAU count. Here's a list of what we consider Auth endpoints:
+
+* /api/v1/headless/access\_token/refresh
+* /api/v1/headless/access\_token/revoke
+* /api/v1/headless/auth\_token
+* /api/v1/headless/refresh\_token/revoke
+* /api/headless/v1/cookies
+* /session/cookies (cookies redirect URL)

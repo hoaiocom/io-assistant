@@ -1,0 +1,123 @@
+# File uploads
+
+Here's how **file uploads** work with endpoints that accept file parameters:
+
+1. The client makes an API call to Circle's API, sending file information.
+2. The server requests a pre-signed URL from our storage based on the file information received.
+3. The storage returns the pre-signed URL to the server.
+4. The server returns the pre-signed URL to the client as a response to the initial API call.
+5. The client uses this URL to upload the file directly to the storage, which sends a confirmation to the client.
+
+<figure><img src="https://3386231300-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FTxViy1AlkVpH99B9E7eY%2Fuploads%2Fr5Q3t2Bu4WL2heIST03N%2FScreenshot%202024-09-08%20at%2020.12.23.png?alt=media&#x26;token=f0e3fe7e-efe0-495f-96e7-7f85887ee6d3" alt=""><figcaption></figcaption></figure>
+
+#### Request
+
+To perform the first API call to the Member API, you need to mount the request correctly.&#x20;
+
+```bash
+curl -X POST 'https://app.circle.so/api/headless/v1/direct_uploads' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+-d '{
+  "blob": {
+    "key": "your_file_key",
+    "filename": "your_filename.ext",
+    "content_type": "your_content_type",
+    "byte_size": 12345,
+    "checksum": "your_file_checksum"
+  }
+}'
+```
+
+The `checksum` attribute is a Base64 version of your file MD5. Here's a TypeScript sample of how mounting those files in a browser will look like.
+
+```typescript
+const convertFileToMd5 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = function (event) {
+      const binary = event.target?.result;
+      if (binary) {
+        const wordArray = enc.Latin1.parse(binary as string);
+        const md5 = MD5(wordArray).toString();
+        resolve(md5);
+      } else {
+        reject(new Error('Failed to read file'));
+      }
+    };
+
+    reader.onerror = function (error) {
+      reject(error);
+    };
+
+    reader.readAsBinaryString(file);
+  });
+};
+
+const mountFileToSend = (file: File, md5: string) => {
+  const base64 = btoa(
+    md5
+      .match(/\w{2}/g)!
+      .map((a) => String.fromCharCode(parseInt(a, 16)))
+      .join('')
+  );
+  return {
+    key: '',
+    filename: file.name,
+    byte_size: file.size,
+    checksum: base64,
+    content_type: file.type,
+    size: file.size,
+  };
+};
+
+// usage
+const md5 = await convertFileToMd5(file);
+// this is what will be sent to the API
+const fileData = mountFileToSend(file, md5);
+```
+
+#### Response
+
+The important key here is `direct_upload`, that's where the signed url that the file will be sent to is, it's also the place where the headers live, those will also be sent to the same URL as part of the PUT request.&#x20;
+
+```json
+{
+  "id": 12345,
+  "key": "file_key_123",
+  "filename": "example.jpg",
+  "content_type": "image/jpeg",
+  "byte_size": 1048576,
+  "checksum": "abcdef1234567890",
+  "created_at": "2024-09-12T14:30:00Z",
+  "metadata": {
+    "identified": true
+  },
+  "service_name": "s3",
+  "signed_id": "eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCZz09IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--abcdef1234567890",
+  "attachable_sgid": "BAh7CEkiCGdpZAY6BkVUSSIpZ2lkOi8vbXktYXBwL0Jsb2IvMTIzNDU2Nzg5MAY7AFRJIgxwdXJwb3NlBjsAVEkiD2F0dGFjaGFibGUGOwBUSSIPZXhwaXJlc19hdAY7AFQw",
+  "direct_upload": {
+    "url": "https://your-bucket.s3.amazonaws.com/uploads/123456789",
+    "headers": {
+      "Content-Type": "image/jpeg",
+      "Content-MD5": "abcdef1234567890="
+    }
+  },
+  "url": "https://your-cdn.com/uploads/123456789/example.jpg"
+}
+```
+
+here's an example on how the request would look like in TypeScript.
+
+```typescript
+fetch(direct_upload.url, {
+        method: 'PUT',
+        headers: direct_upload.headers as Record<
+          string,
+          string
+        >,
+        // the same file we generated the MD5 from, you can send the File itself
+        body: file,
+      });
+```

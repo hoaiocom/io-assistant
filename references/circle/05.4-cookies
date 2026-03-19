@@ -1,0 +1,65 @@
+# Cookies
+
+{% hint style="info" %}
+Disclaimer: Setting cookies in iframes may be affected by browser-specific security policies and privacy settings.
+{% endhint %}
+
+Customers who iFrame embed their Circle community in their own app or website commonly face the challenge of needing their members to authenticate twice: once into your own app, and once again into your Circle community via the embedded iFrame.
+
+Using Headless, you can solve this by generating a member token, and injecting session cookies in your website or app so they don't need to authenticate twice.
+
+### SSO (Single Sign-On)
+
+SSO is the best way to integrate user accounts from your platform into Circle. Here's how you can setup a [OAuth0 custom SSO](https://help.circle.so/p/sso-and-integrations/sso/set-up-custom-sso) into your community.&#x20;
+
+For communities that have SSO enabled, Circle stores an attribute called SSO User ID. SSO User ID is an identifier assigned to a user by the SSO  provider. Circle does not create, update, or manage SSO User IDs for SSO-registered members.
+
+Example with Google as the SSO provider: When using Google for authentication, the SSO User ID is typically the user's Google account ID. This is a unique string of numbers and letters that Google assigns to each user account. For instance:
+
+* Google Account ID (SSO User ID): `118234567890123456789`
+
+This ID remains consistent for the user across different services that use Google SSO. Circle would store this ID to associate the user's Google account with their Circle app profile, but Circle does not generate or manage this ID itself.
+
+It's important to note that this ID is **different** from:
+
+* The user's email address (e.g., `user@gmail.com`)
+* The user's display name on Google services
+* Any internal user ID that Circle might assign for its own database management
+
+{% hint style="info" %}
+With SSO configured, it's not necessary to perform any invitation flows (via Admin API or not) via Circle. Once the member is registered into your auth provider, the SSO User ID gets registered in Circle and gets associated with the user's member record.
+{% endhint %}
+
+### Injecting session cookies via URL redirect
+
+The simplest way to get authenticated is to navigate to our authentication URL with the access token as part of the query params.
+
+1. Navigate to `https://{communityDomain}/session/cookies?access_token={YOUR_ACCESS_TOKEN}`.
+2. That should take you to your community's root path (either `/` or `/home`, depending on your community configuration).
+
+### Injecting session cookies via API
+
+Our cookies endpoint automatically authenticate users in your community iFrame/webview by injecting session cookies into their browser.
+
+To do this, you'll need to make sure that the community domain shares the same top-level TLD as your main website's domain to avoid issues with third-party cookies.
+
+```bash
+curl -X POST 'https://{domain}/api/headless/v1/cookies' \
+-H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+-H 'Content-Type: application/json'
+```
+
+Once you receive a success (200) response, you'll see `message` parameter with a `Set-Cookies` response header. If you're performing this call using a browser (injecting a fetch request, for instance), the session cookie will automatically be set. If not, you'll need to manually inject the contents of this header as a cookie.
+
+```json
+// Response body
+{
+  "message": "Cookies generated"
+}
+
+// Response headers
+{
+  // ...
+  "Set-Cookie": "user_session_identifier={session-identifier-here}%2Fs%2BaSnlgoZ4biUfv3aHG%2FEikGbuYTeO0N4coEf2za7PjyiOd0akeRViuGmFW2I5tZn4igNXANCz2IEJ6x9ATCMlfigJIHJZXU3ZO0T7ohycyXPeS52LDHPMe9Hb3yweV4GEmpfvyJl5wb7A9aszlYzA2Y6zyB6S2DPG2phPUWuv4j8akk6q7MGBp1gIhn2yRYKmA%3D%3D--2DRGZMVYeq5h5JFv--LzMaV5ENIvsfIhnSK5vmlw%3D%3D; path=/; expires=Wed, 10 Sep 2025 13:22:39 GMT; SameSite=None; Secure"
+}
+```

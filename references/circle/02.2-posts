@@ -1,0 +1,136 @@
+# Posts
+
+### Post types
+
+There are three types of posts in Circle spaces:
+
+* **Basic**:
+  * A post in a post space.
+  * Supports text, links, images, videos, embedded media and much more.
+  * Ideal for general discussions, announcements, or longer-form content.
+* **Event**:
+  * An event in an event space.
+  * Includes a sophisticated but simple body and meta information
+  * Optimal for visual storytelling, portfolios, or product showcases.
+* **Image:**
+  * A image in an image space.
+  * Supports single or multiple images.
+  * Optimal for visual storytelling, portfolios, or product showcases.
+
+### Basic posts
+
+Here's an example of the structure of a **basic** post in a posts space:
+
+```typescript
+{
+  post_type: 'basic',
+  space_type: 'basic',
+  id: number,
+  name: string,
+  display_title: string,
+  slug: string,
+  body: {
+    attachments: {},
+    html: string,
+  },
+  body_plain_text: string,
+  url: string,
+  created_at: string,
+  updated_at: string,
+  space: {
+    id: number,
+    slug: string,
+    name: string,
+    emoji: string,
+  },
+  author: {
+    id: number,
+    name: string,
+    avatar_url: string,
+    roles: string[],
+  },
+  tiptap_body: TipTapRichTextBody
+  // ... other attributes
+}
+```
+
+### Image posts
+
+Image posts are similar to basic posts, but include a **gallery** attribute:
+
+* **gallery**: An array of images, each containing (along side other attributes):
+  * Original image URL
+  * Optimized image URL (for improved performance)
+  * Dimensions (width and height)
+
+```typescript
+gallery: {
+  id: number
+  downloadable_images: boolean
+  images: {
+    id: number
+    signed_id: string
+    original_url: string
+    url: string
+    filename: string
+    width: number
+    height: number
+  }[]
+}
+```
+
+Galleries supports multiple images per post, and images are optimized automatically upon upload. An image may include additional metadata such dimensions, file size, EXIF data.
+
+### Event posts
+
+Event posts are designed for managing and displaying events in an event space.
+
+In addition to the output from a **basic** post, you'll find event-specific attributes such as:
+
+```typescript
+{
+  tiptap_body: TipTapRichTextBody
+  event_attendees?: {
+    count: number;
+    records: User[];
+  };
+  event_settings_attributes: {
+    starts_at: string;
+    ends_at: string;
+    in_person_location: string | null;
+    hide_location_from_non_attendees: boolean;
+    duration_in_seconds: number;
+    rsvp_disabled: boolean;
+    hide_attendees: boolean;
+    send_email_reminder: boolean;
+    send_in_app_notification_reminder: boolean;
+    send_email_confirmation: boolean;
+    send_in_app_notification_confirmation: boolean;
+    enable_custom_thank_you_message: boolean;
+    confirmation_message_title: string | null;
+    confirmation_message_description: string | null;
+    confirmation_message_button_title: string | null;
+    confirmation_message_button_link: string | null;
+    location_type: LocationType;
+    virtual_location_url: string | null;
+    live_stream_recording_url?: string | null;
+    rsvp_limit?: number | null;
+    rsvp_count: number;
+  };
+  event_recurring_settings_attributes: {
+    frequency: 'daily' | 'weekly' | 'bi_weekly' | 'monthly' | 'monthly_weekday_based' | 'annually';
+    ends_at: string;
+    occurrences: string | null;
+    range_type: string;
+  };
+  paywall_attributes?: {
+    amount: number
+    checkout_url: string
+    currency_code: string
+    currency_symbol: string
+  }
+  // ... other post attributes
+}
+```
+
+\ <br>
