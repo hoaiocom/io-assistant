@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
 import { renderTiptapToHtml } from "@/lib/tiptap-renderer";
 import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 import { MemberProfileDialog } from "@/components/community/MemberProfileDialog";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 
 function escapeHtml(text: string): string {
   return text
@@ -36,6 +40,8 @@ type TiptapNode = {
 type TiptapBody = {
   body?: TiptapNode;
   sgids_to_object_map?: Record<string, Record<string, unknown>>;
+  inline_attachments?: Array<Record<string, unknown>>;
+  attachments?: Array<Record<string, unknown>>;
 };
 
 function renderMarksReact(text: string, marks?: TiptapMark[]) {
@@ -81,6 +87,8 @@ function asNumber(v: unknown): number | null {
 function renderNodeReact(
   node: TiptapNode,
   sgidsMap: Record<string, Record<string, unknown>> | undefined,
+  inlineAttachments: Array<Record<string, unknown>> | undefined,
+  attachments: Array<Record<string, unknown>> | undefined,
   opts: {
     onOpenProfile: (memberId: number, name?: string, avatarUrl?: string | null) => void;
   },
@@ -89,14 +97,14 @@ function renderNodeReact(
   switch (node.type) {
     case "doc":
       return (node.content || []).map((c, idx) =>
-        renderNodeReact(c, sgidsMap, opts, `${key}-d${idx}`),
+        renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-d${idx}`),
       );
 
     case "paragraph":
       return (
         <p key={key}>
           {(node.content || []).map((c, idx) =>
-            renderNodeReact(c, sgidsMap, opts, `${key}-p${idx}`),
+            renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-p${idx}`),
           )}
         </p>
       );
@@ -104,7 +112,7 @@ function renderNodeReact(
     case "heading": {
       const level = (node.attrs?.level as number) || 2;
       const inner = (node.content || []).map((c, idx) =>
-        renderNodeReact(c, sgidsMap, opts, `${key}-h${idx}`),
+        renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-h${idx}`),
       );
       if (level <= 1) return <h1 key={key}>{inner}</h1>;
       if (level === 2) return <h2 key={key}>{inner}</h2>;
@@ -123,7 +131,7 @@ function renderNodeReact(
       return (
         <ul key={key}>
           {(node.content || []).map((c, idx) =>
-            renderNodeReact(c, sgidsMap, opts, `${key}-ul${idx}`),
+            renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-ul${idx}`),
           )}
         </ul>
       );
@@ -132,7 +140,7 @@ function renderNodeReact(
       return (
         <ol key={key} start={asNumber(node.attrs?.start) || 1}>
           {(node.content || []).map((c, idx) =>
-            renderNodeReact(c, sgidsMap, opts, `${key}-ol${idx}`),
+            renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-ol${idx}`),
           )}
         </ol>
       );
@@ -141,7 +149,7 @@ function renderNodeReact(
       return (
         <li key={key}>
           {(node.content || []).map((c, idx) =>
-            renderNodeReact(c, sgidsMap, opts, `${key}-li${idx}`),
+            renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-li${idx}`),
           )}
         </li>
       );
@@ -150,7 +158,7 @@ function renderNodeReact(
       return (
         <blockquote key={key}>
           {(node.content || []).map((c, idx) =>
-            renderNodeReact(c, sgidsMap, opts, `${key}-bq${idx}`),
+            renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-bq${idx}`),
           )}
         </blockquote>
       );
@@ -172,9 +180,132 @@ function renderNodeReact(
       return <hr key={key} />;
 
     case "image": {
-      const url = node.attrs?.url as string;
+      const explicitUrl = node.attrs?.url as string | undefined;
+
+      let attachmentUrl: string | undefined;
+      if (inlineAttachments || attachments) {
+        const sgid =
+          (node.attrs?.sgid as string | undefined) ||
+          (node.attrs?.attachment_sgid as string | undefined) ||
+          (node.attrs?.inline_attachment_sgid as string | undefined);
+        const signedId =
+          (node.attrs?.signed_id as string | undefined) ||
+          (node.attrs?.signedId as string | undefined);
+
+        if (sgid || signedId) {
+          const all = [...(inlineAttachments || []), ...(attachments || [])];
+          const attachment = all.find((att) => {
+            const a = att as Record<string, unknown>;
+            return (
+              (sgid && (a.sgid as string | undefined) === sgid) ||
+              (signedId && (a.signed_id as string | undefined) === signedId) ||
+              (signedId && (a.signedId as string | undefined) === signedId)
+            );
+          }) as Record<string, unknown> | undefined;
+          if (attachment) {
+            const candidates = [
+              attachment.url,
+              attachment.original_url,
+              attachment.large_url,
+              attachment.preview_url,
+              attachment.cdn_url,
+              (attachment as { image_variants?: unknown }).image_variants &&
+                (attachment as { image_variants: Record<string, unknown> }).image_variants
+                  .original,
+            ] as Array<unknown>;
+            for (const c of candidates) {
+              if (typeof c === "string" && c) {
+                attachmentUrl = c;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      let sgidUrl: string | undefined;
+      const sgid = node.attrs?.sgid as string | undefined;
+      if (sgid && sgidsMap && sgidsMap[sgid]) {
+        const obj = sgidsMap[sgid] as Record<string, unknown>;
+        const candidates = [
+          obj.url,
+          obj.original_url,
+          obj.large_url,
+          obj.preview_url,
+          obj.cdn_url,
+          obj.image_url,
+        ] as Array<unknown>;
+        for (const c of candidates) {
+          if (typeof c === "string" && c) {
+            sgidUrl = c;
+            break;
+          }
+        }
+      }
+
+      const url = explicitUrl || attachmentUrl || sgidUrl;
       if (!url) return null;
       return <img key={key} src={url} alt="" />;
+    }
+
+    case "entity": {
+      const sgid = node.attrs?.sgid as string | undefined;
+      const fallback = node.circle_ios_fallback_text || "";
+      const obj = sgid && sgidsMap ? (sgidsMap[sgid] as Record<string, unknown> | undefined) : undefined;
+      const name = (obj?.name as string) || (obj?.title as string) || fallback || "Link";
+      const href = (obj?.url as string) || undefined;
+      if (!href) {
+        return (
+          <span key={key} className="mention">
+            {name}
+          </span>
+        );
+      }
+      return (
+        <a key={key} href={href} target="_blank" rel="noopener noreferrer">
+          {name}
+        </a>
+      );
+    }
+
+    case "cta": {
+      const url = node.attrs?.url as string | undefined;
+      const label = (node.attrs?.label as string | undefined) || "Open link";
+      const alignment = node.attrs?.alignment as string | undefined;
+      const fullWidth = node.attrs?.full_width === true;
+      const background = (node.attrs?.color as string | undefined) || "#0582ff";
+      const color = (node.attrs?.text_color as string | undefined) || "#ffffff";
+      if (!url) return null;
+
+      return (
+        <div
+          key={key}
+          style={{
+            textAlign:
+              alignment === "center" ? "center" : alignment === "right" ? "right" : "left",
+          }}
+        >
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textDecoration: "none",
+              fontWeight: 600,
+              borderRadius: 10,
+              padding: "10px 14px",
+              background,
+              color,
+              width: fullWidth ? "100%" : undefined,
+            }}
+          >
+            {label}
+          </a>
+        </div>
+      );
     }
 
     case "mention": {
@@ -220,7 +351,7 @@ function renderNodeReact(
     default: {
       if (node.content) {
         return (node.content || []).map((c, idx) =>
-          renderNodeReact(c, sgidsMap, opts, `${key}-x${idx}`),
+          renderNodeReact(c, sgidsMap, inlineAttachments, attachments, opts, `${key}-x${idx}`),
         );
       }
       if (node.text) return <span key={key}>{node.text}</span>;
@@ -271,16 +402,22 @@ export function RichText({
   const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
   const [profileInitialName, setProfileInitialName] = useState<string | undefined>(undefined);
   const [profileInitialAvatar, setProfileInitialAvatar] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const normalized = useMemo(() => normalizeTiptapBody(tiptap), [tiptap]);
   const reactTree = useMemo(() => {
     if (!enableMentions || !normalized || typeof normalized !== "object") return null;
     const tb = normalized as TiptapBody;
     const doc = tb.body;
+    const inlineAttachments = tb.inline_attachments;
+    const attachments = tb.attachments;
     if (!doc || typeof doc !== "object" || !doc.type) return null;
     return renderNodeReact(
       doc,
       tb.sgids_to_object_map,
+      inlineAttachments,
+      attachments,
       {
         onOpenProfile: (memberId, name, avatarUrl) => {
           setProfileMemberId(memberId);
@@ -300,6 +437,25 @@ export function RichText({
 
   if (!reactTree && !content) return null;
 
+  const attachmentsToRender = useMemo(() => {
+    if (!normalized || typeof normalized !== "object") return [];
+    const tb = normalized as TiptapBody;
+    return Array.isArray(tb.attachments) ? tb.attachments : [];
+  }, [normalized]);
+
+  const imageAttachments = useMemo(() => {
+    return attachmentsToRender
+      .map((a) => a as Record<string, unknown>)
+      .map((a) => ({
+        url: typeof a.url === "string" ? a.url : null,
+        filename: typeof a.filename === "string" ? a.filename : null,
+        contentType: typeof a.content_type === "string" ? a.content_type : null,
+      }))
+      .filter((a) => !!a.url && (!!a.contentType ? a.contentType.startsWith("image/") : true));
+  }, [attachmentsToRender]);
+
+  const activeLightbox = imageAttachments[lightboxIndex] || null;
+
   return (
     <>
       {profileMemberId != null && (
@@ -311,6 +467,71 @@ export function RichText({
           initialAvatarUrl={profileInitialAvatar}
         />
       )}
+
+      {/* Lightbox for chat attachments */}
+      {reactTree && imageAttachments.length > 0 && (
+        <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+          <DialogContent className="max-w-[100vw] w-screen h-screen p-0 border-0 bg-transparent shadow-none">
+            {/* Click on the dark background closes the lightbox */}
+            <div
+              className="relative h-full w-full flex items-center justify-center"
+              onClick={() => setLightboxOpen(false)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activeLightbox?.url || ""}
+                alt={activeLightbox?.filename || ""}
+                className="max-h-[85vh] w-auto max-w-[92vw] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+
+              {imageAttachments.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Previous image"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-2 py-1 text-sm text-white hover:bg-black/80"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxIndex((i) =>
+                        i === 0 ? imageAttachments.length - 1 : i - 1,
+                      );
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next image"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-2 py-1 text-sm text-white hover:bg-black/80"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxIndex((i) =>
+                        i === imageAttachments.length - 1 ? 0 : i + 1,
+                      );
+                    }}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+
+              {activeLightbox?.url && (
+                <a
+                  href={activeLightbox.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute bottom-4 right-4 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white hover:bg-black/80"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Open
+                </a>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <div
         className={cn(
           // Consistent Circle-like rendering across community chat/DM
@@ -333,6 +554,44 @@ export function RichText({
       >
         {reactTree}
       </div>
+
+      {reactTree && imageAttachments.length > 0 && (
+        <div className={cn("mt-2 flex flex-wrap gap-3 justify-start", className)}>
+          {imageAttachments.map((a, idx) => (
+            (() => {
+              const isGif = a.contentType === "image/gif";
+              const wrapperClass = isGif
+                ? "group relative overflow-hidden aspect-square h-32 w-32"
+                : "group relative flex items-center justify-start";
+              const imgClass = isGif
+                ? "h-full w-full object-contain"
+                : "max-h-32 max-w-[200px] object-contain";
+
+              return (
+            <button
+              key={`${a.url}-${idx}`}
+              type="button"
+              className={wrapperClass}
+              onClick={() => {
+                setLightboxIndex(idx);
+                setLightboxOpen(true);
+              }}
+              aria-label={a.filename ? `Open ${a.filename}` : "Open image"}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={a.url!}
+                alt={a.filename || ""}
+                loading="lazy"
+                className={imgClass}
+              />
+              <span className="pointer-events-none absolute inset-0 ring-1 ring-black/5" />
+            </button>
+              );
+            })()
+          ))}
+        </div>
+      )}
     </>
   );
 }

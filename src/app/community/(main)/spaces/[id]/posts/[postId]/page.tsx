@@ -224,11 +224,13 @@ function CommentItem({
   postId,
   depth,
   onMutate,
+  onLoadMoreReplies,
 }: {
   comment: CommentData;
   postId: string;
   depth: number;
   onMutate: () => void;
+  onLoadMoreReplies?: () => void;
 }) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -237,6 +239,8 @@ function CommentItem({
   const [likeCount, setLikeCount] = useState(comment.user_likes_count ?? 0);
   const [expanded, setExpanded] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [imageLightboxSrc, setImageLightboxSrc] = useState<string | null>(null);
 
   const cAuthor = comment.author || comment.community_member;
   const cName = cAuthor?.name || comment.user_name || "Unknown";
@@ -256,6 +260,12 @@ function CommentItem({
   const contentText = cText || "";
   const isLong = contentText.length > 300;
   const replies = comment.replies || [];
+  const totalReplies =
+    typeof comment.replies_count === "number"
+      ? comment.replies_count
+      : replies.length;
+  const canShowMoreReplies =
+    !!onLoadMoreReplies && totalReplies > replies.length;
 
   async function handleLikeComment() {
     const wasLiked = liked;
@@ -380,10 +390,20 @@ function CommentItem({
                 <div className="relative">
                   <div
                     className={cn(
-                      "comment-body",
+                      "comment-body [&_img]:block [&_img]:max-w-[50%] [&_img]:max-w-sm [&_img]:max-h-48 [&_img]:h-auto [&_img]:cursor-zoom-in [&_img]:object-contain [&_img]:ml-0 [&_img]:mr-auto",
                       isLong && !expanded && "max-h-[120px] overflow-hidden",
                     )}
                     dangerouslySetInnerHTML={{ __html: cHtml }}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target && target.tagName === "IMG") {
+                        const img = target as HTMLImageElement;
+                        if (img.src) {
+                          setImageLightboxSrc(img.src);
+                          setImageLightboxOpen(true);
+                        }
+                      }
+                    }}
                   />
                   {isLong && !expanded && (
                     <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-card to-transparent" />
@@ -411,6 +431,24 @@ function CommentItem({
                 >
                   {expanded ? "See less" : "... See more"}
                 </button>
+              )}
+              {imageLightboxSrc && (
+                <Dialog open={imageLightboxOpen} onOpenChange={setImageLightboxOpen}>
+                  <DialogContent className="max-w-[100vw] w-screen h-screen p-0 border-0 bg-transparent shadow-none">
+                    <div
+                      className="relative h-full w-full flex items-center justify-center"
+                      onClick={() => setImageLightboxOpen(false)}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageLightboxSrc}
+                        alt=""
+                        className="max-h-[85vh] w-auto max-w-[92vw] object-contain"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
 
@@ -489,7 +527,7 @@ function CommentItem({
               className="flex items-center gap-1 text-xs font-medium text-primary hover:underline ml-12 mb-2"
             >
               <ChevronDown className="h-3 w-3" />
-              Show {replies.length} {replies.length === 1 ? "reply" : "replies"}
+              Show more replies
             </button>
           )}
           {(showReplies ? replies : replies.slice(0, 2)).map((reply) => (
@@ -508,6 +546,15 @@ function CommentItem({
             >
               <ChevronUp className="h-3 w-3" />
               Hide replies
+            </button>
+          )}
+          {showReplies && canShowMoreReplies && (
+            <button
+              type="button"
+              onClick={onLoadMoreReplies}
+              className="ml-12 mb-2 text-xs font-medium text-primary hover:underline"
+            >
+              Show more replies
             </button>
           )}
         </div>
@@ -1059,6 +1106,11 @@ export default function PostDetailPage() {
                       postId={postId}
                       depth={0}
                       onMutate={handleMutateComments}
+                      onLoadMoreReplies={
+                        hasMoreComments
+                          ? () => setCommentPage((p) => p + 1)
+                          : undefined
+                      }
                     />
                   ))}
                 </div>

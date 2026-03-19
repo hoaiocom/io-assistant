@@ -16,6 +16,7 @@ interface TiptapBody {
   body?: TiptapNode;
   circle_ios_fallback_text?: string;
   sgids_to_object_map?: Record<string, Record<string, unknown>>;
+  attachments?: Array<Record<string, unknown>>;
   inline_attachments?: Array<Record<string, unknown>>;
 }
 
@@ -64,42 +65,100 @@ function renderMarks(text: string, marks?: TiptapMark[]): string {
   return result;
 }
 
+function findAttachmentUrl(
+  attrs: Record<string, unknown> | undefined,
+  inlineAttachments: Array<Record<string, unknown>> | undefined,
+  attachments: Array<Record<string, unknown>> | undefined,
+): string | null {
+  if (!attrs) return null;
+
+  // Circle can identify inline attachments by sgid OR signed_id (common for images)
+  const sgid =
+    (attrs.sgid as string | undefined) ||
+    (attrs.attachment_sgid as string | undefined) ||
+    (attrs.inline_attachment_sgid as string | undefined);
+  const signedId =
+    (attrs.signed_id as string | undefined) ||
+    (attrs.signedId as string | undefined);
+
+  if (!sgid && !signedId) return null;
+
+  const all = [...(inlineAttachments || []), ...(attachments || [])];
+  const attachment = all.find(
+    (att) =>
+      (sgid && (att.sgid as string | undefined) === sgid) ||
+      (signedId && (att.signed_id as string | undefined) === signedId) ||
+      (signedId && (att.signedId as string | undefined) === signedId),
+  );
+  if (!attachment) return null;
+
+  const urlCandidates = [
+    // Common Circle attachment URL fields
+    (attachment as { url?: unknown }).url,
+    (attachment as { original_url?: unknown }).original_url,
+    (attachment as { large_url?: unknown }).large_url,
+    (attachment as { preview_url?: unknown }).preview_url,
+    (attachment as { cdn_url?: unknown }).cdn_url,
+  ] as Array<unknown>;
+
+  for (const candidate of urlCandidates) {
+    if (typeof candidate === "string" && candidate) return candidate;
+  }
+  return null;
+}
+
 function renderNode(
   node: TiptapNode,
   sgidsMap?: Record<string, Record<string, unknown>>,
+  inlineAttachments?: Array<Record<string, unknown>>,
+  attachments?: Array<Record<string, unknown>>,
 ): string {
   switch (node.type) {
     case "doc":
-      return (node.content || []).map((c) => renderNode(c, sgidsMap)).join("");
+      return (node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("");
 
     case "paragraph": {
-      const inner = (node.content || []).map((c) => renderNode(c, sgidsMap)).join("");
+      const inner = (node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("");
       return `<p>${inner || ""}</p>`;
     }
 
     case "heading": {
       const level = (node.attrs?.level as number) || 2;
       const tag = `h${Math.min(Math.max(level, 1), 6)}`;
-      return `<${tag}>${(node.content || []).map((c) => renderNode(c, sgidsMap)).join("")}</${tag}>`;
+      return `<${tag}>${(node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("")}</${tag}>`;
     }
 
     case "text":
       return renderMarks(node.text || "", node.marks);
 
     case "bulletList":
-      return `<ul>${(node.content || []).map((c) => renderNode(c, sgidsMap)).join("")}</ul>`;
+      return `<ul>${(node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("")}</ul>`;
 
     case "orderedList": {
       const start = (node.attrs?.start as number) || 1;
       const startAttr = start !== 1 ? ` start="${start}"` : "";
-      return `<ol${startAttr}>${(node.content || []).map((c) => renderNode(c, sgidsMap)).join("")}</ol>`;
+      return `<ol${startAttr}>${(node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("")}</ol>`;
     }
 
     case "listItem":
-      return `<li>${(node.content || []).map((c) => renderNode(c, sgidsMap)).join("")}</li>`;
+      return `<li>${(node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("")}</li>`;
 
     case "blockquote":
-      return `<blockquote>${(node.content || []).map((c) => renderNode(c, sgidsMap)).join("")}</blockquote>`;
+      return `<blockquote>${(node.content || [])
+        .map((c) => renderNode(c, sgidsMap, inlineAttachments, attachments))
+        .join("")}</blockquote>`;
 
     case "codeBlock": {
       const lang = node.attrs?.language as string;
@@ -115,7 +174,30 @@ function renderNode(
       return "<hr>";
 
     case "image": {
-      const url = node.attrs?.url as string;
+      const explicitUrl = node.attrs?.url as string | undefined;
+      const attachmentUrl = findAttachmentUrl(node.attrs, inlineAttachments, attachments);
+
+      let sgidUrl: string | null = null;
+      const sgid = node.attrs?.sgid as string | undefined;
+      if (sgid && sgidsMap && sgidsMap[sgid]) {
+        const obj = sgidsMap[sgid] as Record<string, unknown>;
+        const candidates = [
+          obj.url,
+          obj.original_url,
+          obj.large_url,
+          obj.preview_url,
+          obj.cdn_url,
+          obj.image_url,
+        ] as Array<unknown>;
+        for (const c of candidates) {
+          if (typeof c === "string" && c) {
+            sgidUrl = c;
+            break;
+          }
+        }
+      }
+
+      const url = explicitUrl || attachmentUrl || sgidUrl || "";
       if (!url) return "";
       const width = node.attrs?.width as string;
       const alignment = node.attrs?.alignment as string;
@@ -125,6 +207,37 @@ function renderNode(
       else if (alignment === "right") style += "display:block;margin-left:auto;";
       const styleAttr = style ? ` style="${style}"` : "";
       return `<img src="${escapeHtml(url)}"${styleAttr} />`;
+    }
+
+    case "cta": {
+      const url = node.attrs?.url as string | undefined;
+      const label = (node.attrs?.label as string | undefined) || "Open link";
+      const color = node.attrs?.color as string | undefined;
+      const textColor = node.attrs?.text_color as string | undefined;
+      const alignment = node.attrs?.alignment as string | undefined;
+      const fullWidth = node.attrs?.full_width === true;
+      if (!url) return "";
+      const style = [
+        "display:inline-flex",
+        "align-items:center",
+        "justify-content:center",
+        "text-decoration:none",
+        "font-weight:600",
+        "border-radius:10px",
+        "padding:10px 14px",
+        fullWidth ? "width:100%" : "",
+        color ? `background:${escapeHtml(color)}` : "background:#0582ff",
+        textColor ? `color:${escapeHtml(textColor)}` : "color:#ffffff",
+      ]
+        .filter(Boolean)
+        .join(";");
+      const wrapStyle =
+        alignment === "center"
+          ? "text-align:center;"
+          : alignment === "right"
+            ? "text-align:right;"
+            : "text-align:left;";
+      return `<div style="${wrapStyle}"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="${style}">${escapeHtml(label)}</a></div>`;
     }
 
     case "mention": {
@@ -197,7 +310,7 @@ export function renderTiptapToHtml(tiptapBody: unknown): string {
   const doc = tb.body;
   if (!doc || typeof doc !== "object" || !doc.type) return "";
 
-  return renderNode(doc, tb.sgids_to_object_map);
+  return renderNode(doc, tb.sgids_to_object_map, tb.inline_attachments, tb.attachments);
 }
 
 export function getTiptapPlainText(tiptapBody: unknown): string {
