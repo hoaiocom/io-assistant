@@ -64,17 +64,48 @@ export function getSpacePosts(
     page?: number;
     per_page?: number;
     sort?: string;
-    past_events?: string;
-    topics?: string;
+    past_events?: string | boolean;
+    topics?: number[];
   },
 ) {
-  const entries = Object.entries(params || {}).filter(
-    ([, v]) => v !== undefined && v !== null,
-  );
-  const query = new URLSearchParams(
-    entries.map(([k, v]) => [k, String(v)]),
-  ).toString();
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set("page", String(params.page));
+  if (params?.per_page) queryParams.set("per_page", String(params.per_page));
+  if (params?.sort) queryParams.set("sort", params.sort);
+  if (params?.past_events !== undefined)
+    queryParams.set("past_events", String(params.past_events));
+  if (params?.topics?.length) {
+    for (const topicId of params.topics) queryParams.append("topics", String(topicId));
+  }
+  const query = queryParams.toString();
   return memberRequest<unknown>(`spaces/${spaceId}/posts${query ? `?${query}` : ""}`, token);
+}
+
+export function getSpaceTopics(
+  token: string,
+  spaceId: number,
+  params?: { page?: number; per_page?: number },
+) {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set("page", String(params.page));
+  if (params?.per_page) queryParams.set("per_page", String(params.per_page));
+  const query = queryParams.toString();
+  return memberRequest<unknown>(`spaces/${spaceId}/topics${query ? `?${query}` : ""}`, token);
+}
+
+export function getSpaceBookmarks(
+  token: string,
+  spaceId: number,
+  params?: { page?: number; per_page?: number },
+) {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set("page", String(params.page));
+  if (params?.per_page) queryParams.set("per_page", String(params.per_page));
+  const query = queryParams.toString();
+  return memberRequest<unknown>(
+    `spaces/${spaceId}/bookmarks${query ? `?${query}` : ""}`,
+    token,
+  );
 }
 
 export function getPostDetail(token: string, spaceId: number, postId: number) {

@@ -27,6 +27,7 @@ These YAMLs are the authoritative API contracts we build against:
 ## Key “how it works” docs in this repo
 
 - **Roadmap / implementation plan**: `references/ROADMAP.md`
+- **Headless UI coverage plans (component checklists)**: `references/plans/HEADLESS-UI-COVERAGE-PLANS.md`
 - **Project overview (Circle docs excerpt)**: `references/circle/01-overview.md`
 - **Admin API notes (Circle docs excerpt)**: `references/circle/04-admin-api.md`
 - **Headless overview & security (Circle docs excerpt)**: `references/circle/05-headless.md`

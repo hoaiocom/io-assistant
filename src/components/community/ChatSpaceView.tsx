@@ -27,6 +27,7 @@ import {
   ChevronUp,
   ChevronDown,
   CornerUpLeft,
+  Users,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import { RichText } from "@/components/community/RichText";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MemberProfileDialog } from "@/components/community/MemberProfileDialog";
 import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -171,6 +173,7 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
   const [oldestId, setOldestId] = useState<number | null>(null);
   const [expandedThreads, setExpandedThreads] = useState<Set<number>>(new Set());
   const [replyToId, setReplyToId] = useState<number | null>(null);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
   const [profileInitialName, setProfileInitialName] = useState<string | undefined>(undefined);
@@ -434,6 +437,68 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
           initialAvatarUrl={profileInitialAvatar}
         />
       )}
+
+      {/* Participants drawer (mobile/tablet) */}
+      <Sheet open={participantsOpen} onOpenChange={setParticipantsOpen}>
+        <SheetContent side="right" className="w-80 bg-card p-0">
+          <SheetTitle className="sr-only">Participants</SheetTitle>
+          <div className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Participants</h2>
+              <span className="text-sm text-muted-foreground">{totalMembers}</span>
+            </div>
+
+            {onlineParticipants.length > 0 && (
+              <div className="mb-4">
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Online
+                </h3>
+                <div className="space-y-0.5">
+                  {onlineParticipants.map((p) => (
+                    <ParticipantRow
+                      key={p.id}
+                      participant={p}
+                      online
+                      onOpenProfile={(memberId, name, avatarUrl) => {
+                        setProfileMemberId(memberId);
+                        setProfileInitialName(name);
+                        setProfileInitialAvatar(avatarUrl);
+                        setProfileOpen(true);
+                        setParticipantsOpen(false);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {offlineParticipants.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Offline
+                </h3>
+                <div className="space-y-0.5">
+                  {offlineParticipants.map((p) => (
+                    <ParticipantRow
+                      key={p.id}
+                      participant={p}
+                      online={false}
+                      onOpenProfile={(memberId, name, avatarUrl) => {
+                        setProfileMemberId(memberId);
+                        setProfileInitialName(name);
+                        setProfileInitialAvatar(avatarUrl);
+                        setProfileOpen(true);
+                        setParticipantsOpen(false);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Main chat column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
@@ -443,6 +508,14 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
             <h1 className="text-base font-semibold">{space.name}</h1>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground xl:hidden"
+              onClick={() => setParticipantsOpen(true)}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
               <Search className="h-4 w-4" />
             </Button>
