@@ -1,6 +1,8 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Heart, MessageCircle, Bookmark } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveBodyHtml } from "@/lib/tiptap-renderer";
+import { MemberProfileDialog } from "@/components/community/MemberProfileDialog";
+import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 
 interface PostAuthor {
   community_member_id?: number;
@@ -105,6 +109,11 @@ function safeTimeAgo(dateStr?: string | null): string {
 }
 
 export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookmark }: PostCardProps) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
+  const [profileInitialName, setProfileInitialName] = useState<string | undefined>(undefined);
+  const [profileInitialAvatar, setProfileInitialAvatar] = useState<string | null>(null);
+
   const author = post.community_member || post.author;
   const authorName = author?.name || post.user_name || "Unknown";
   const authorAvatar = author?.avatar_url || post.user_avatar_url;
@@ -122,6 +131,15 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
 
   return (
     <article className="rounded-xl border bg-card transition-shadow hover:shadow-sm">
+      {profileMemberId != null && (
+        <MemberProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          memberId={profileMemberId}
+          initialName={profileInitialName}
+          initialAvatarUrl={profileInitialAvatar}
+        />
+      )}
       {coverImage && (
         <Link href={postHref}>
           <div className="relative aspect-[2.5/1] overflow-hidden rounded-t-xl">
@@ -133,12 +151,36 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
       <div className="p-4 sm:p-5">
         {/* Author row */}
         <div className="flex items-start gap-3">
-          <Link href={authorId ? `/community/members/${authorId}` : "#"}>
-            <Avatar className="h-9 w-9 shrink-0">
-              <AvatarImage src={authorAvatar || undefined} />
-              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-            </Avatar>
-          </Link>
+          {authorId ? (
+            <MemberAvatarHoverCard
+              memberId={authorId}
+              memberName={authorName}
+              avatarUrl={authorAvatar || null}
+            >
+              <button
+                type="button"
+                className="shrink-0"
+                onClick={() => {
+                  setProfileMemberId(authorId);
+                  setProfileInitialName(authorName);
+                  setProfileInitialAvatar(authorAvatar || null);
+                  setProfileOpen(true);
+                }}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={authorAvatar || undefined} />
+                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                </Avatar>
+              </button>
+            </MemberAvatarHoverCard>
+          ) : (
+            <button type="button" className="shrink-0" disabled>
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={authorAvatar || undefined} />
+                <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+              </Avatar>
+            </button>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <Link
@@ -226,14 +268,36 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
           {/* Liked-by avatars */}
           {post.first_liked_by && post.first_liked_by.length > 0 && (
             <div className="flex -space-x-1.5 ml-1">
-              {post.first_liked_by.slice(0, 3).map((m, i) => (
-                <Avatar key={m.community_member_id || m.id || i} className="h-5 w-5 border-2 border-card">
-                  <AvatarImage src={m.avatar_url || undefined} />
-                  <AvatarFallback className="text-[7px]">
-                    {getInitials(m.name)}
-                  </AvatarFallback>
-                </Avatar>
-              ))}
+              {post.first_liked_by.slice(0, 3).map((m, i) => {
+                const mid = m.community_member_id || m.id;
+                if (!mid) return null;
+                return (
+                  <MemberAvatarHoverCard
+                    key={mid ?? i}
+                    memberId={mid}
+                    memberName={m.name}
+                    avatarUrl={m.avatar_url || null}
+                  >
+                    <button
+                      type="button"
+                      className="shrink-0"
+                      onClick={() => {
+                        setProfileMemberId(mid);
+                        setProfileInitialName(m.name);
+                        setProfileInitialAvatar(m.avatar_url || null);
+                        setProfileOpen(true);
+                      }}
+                    >
+                      <Avatar className="h-5 w-5 border-2 border-card">
+                        <AvatarImage src={m.avatar_url || undefined} />
+                        <AvatarFallback className="text-[7px]">
+                          {getInitials(m.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                  </MemberAvatarHoverCard>
+                );
+              })}
             </div>
           )}
 

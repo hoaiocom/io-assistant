@@ -35,6 +35,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { RichText } from "@/components/community/RichText";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { MemberProfileDialog } from "@/components/community/MemberProfileDialog";
+import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -169,6 +171,10 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
   const [oldestId, setOldestId] = useState<number | null>(null);
   const [expandedThreads, setExpandedThreads] = useState<Set<number>>(new Set());
   const [replyToId, setReplyToId] = useState<number | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
+  const [profileInitialName, setProfileInitialName] = useState<string | undefined>(undefined);
+  const [profileInitialAvatar, setProfileInitialAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const initialScrollDone = useRef(false);
@@ -387,11 +393,19 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...(replyToId ? { parent_message_id: replyToId } : {}),
+            // Headless API expects { rich_text_body: { body: TipTapDoc, ... } }
             rich_text_body: {
-              type: "doc",
-              content: [
-                { type: "paragraph", content: [{ type: "text", text: messageText }] },
-              ],
+              body: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: messageText }],
+                  },
+                ],
+              },
+              circle_ios_fallback_text: messageText,
+              attachments: [],
             },
           }),
         });
@@ -411,6 +425,15 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
 
   return (
     <div className="flex h-full">
+      {profileMemberId != null && (
+        <MemberProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          memberId={profileMemberId}
+          initialName={profileInitialName}
+          initialAvatarUrl={profileInitialAvatar}
+        />
+      )}
       {/* Main chat column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
@@ -513,12 +536,24 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
                               .then(() => mutate())
                               .catch(() => toast.error("Failed to update reaction"));
                           }}
+                          onOpenProfile={(memberId, name, avatarUrl) => {
+                            setProfileMemberId(memberId);
+                            setProfileInitialName(name);
+                            setProfileInitialAvatar(avatarUrl);
+                            setProfileOpen(true);
+                          }}
                         />
                         {isExpanded && totalReplies > 0 && (
                           <ThreadPanel
                             parentMessage={msg}
                             localReplies={localReplies}
                             totalReplies={totalReplies}
+                            onOpenProfile={(memberId, name, avatarUrl) => {
+                              setProfileMemberId(memberId);
+                              setProfileInitialName(name);
+                              setProfileInitialAvatar(avatarUrl);
+                              setProfileOpen(true);
+                            }}
                           />
                         )}
                       </div>
@@ -598,7 +633,17 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
               </h3>
               <div className="space-y-0.5">
                 {onlineParticipants.map((p) => (
-                  <ParticipantRow key={p.id} participant={p} online />
+                  <ParticipantRow
+                    key={p.id}
+                    participant={p}
+                    online
+                    onOpenProfile={(memberId, name, avatarUrl) => {
+                      setProfileMemberId(memberId);
+                      setProfileInitialName(name);
+                      setProfileInitialAvatar(avatarUrl);
+                      setProfileOpen(true);
+                    }}
+                  />
                 ))}
               </div>
             </div>
@@ -611,7 +656,17 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
               </h3>
               <div className="space-y-0.5">
                 {offlineParticipants.map((p) => (
-                  <ParticipantRow key={p.id} participant={p} online={false} />
+                  <ParticipantRow
+                    key={p.id}
+                    participant={p}
+                    online={false}
+                    onOpenProfile={(memberId, name, avatarUrl) => {
+                      setProfileMemberId(memberId);
+                      setProfileInitialName(name);
+                      setProfileInitialAvatar(avatarUrl);
+                      setProfileOpen(true);
+                    }}
+                  />
                 ))}
               </div>
             </div>
@@ -632,6 +687,7 @@ function ChatMessageItem({
   onReply,
   currentMemberId,
   onToggleReaction,
+  onOpenProfile,
 }: {
   message: ChatRoomMessage;
   threadCount: number;
@@ -640,6 +696,7 @@ function ChatMessageItem({
   onReply: () => void;
   currentMemberId?: number;
   onToggleReaction: (message: ChatRoomMessage, emoji: string) => void;
+  onOpenProfile: (memberId: number, name: string, avatarUrl: string | null) => void;
 }) {
   const { sender, body, reactions, sent_at, created_at, rich_text_body } = message;
   const time = formatMessageTime(sent_at || created_at);
@@ -647,7 +704,7 @@ function ChatMessageItem({
   const lastReplyAgo = safeTimeAgo(message.last_reply_at);
 
   return (
-    <div className="group relative flex gap-3">
+    <div className="group relative flex items-start gap-3">
       {/* Hover action bar */}
       <div className="pointer-events-none absolute -top-3 right-0 z-10 hidden items-center gap-0.5 rounded-lg border bg-card p-0.5 shadow-sm group-hover:flex">
         <TooltipProvider delayDuration={200}>
@@ -683,10 +740,30 @@ function ChatMessageItem({
           </Tooltip>
         </TooltipProvider>
       </div>
-      <Avatar className="mt-0.5 h-9 w-9 shrink-0">
-        <AvatarImage src={sender.avatar_url || undefined} />
-        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
-      </Avatar>
+      <MemberAvatarHoverCard
+        memberId={sender.community_member_id}
+        memberName={sender.name}
+        avatarUrl={sender.avatar_url}
+      >
+        <button
+          type="button"
+          className="shrink-0"
+          onClick={() =>
+            onOpenProfile(
+              sender.community_member_id,
+              sender.name,
+              sender.avatar_url,
+            )
+          }
+        >
+          <Avatar className="h-9 w-9 self-start">
+            <AvatarImage src={sender.avatar_url || undefined} />
+            <AvatarFallback className="text-[10px]">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </MemberAvatarHoverCard>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">{sender.name}</span>
@@ -766,10 +843,12 @@ function ThreadPanel({
   parentMessage,
   localReplies,
   totalReplies,
+  onOpenProfile,
 }: {
   parentMessage: ChatRoomMessage;
   localReplies: ChatRoomMessage[];
   totalReplies: number;
+  onOpenProfile: (memberId: number, name: string, avatarUrl: string | null) => void;
 }) {
   const [fetchedReplies, setFetchedReplies] = useState<ChatRoomMessage[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -838,13 +917,36 @@ function ThreadPanel({
       ) : replies.length > 0 ? (
         <div className="divide-y">
           {replies.map((reply) => (
-            <div key={reply.id} className="flex gap-2.5 px-4 py-3">
-              <Avatar className="mt-0.5 h-8 w-8 shrink-0">
-                <AvatarImage src={reply.sender.avatar_url || undefined} />
-                <AvatarFallback className="text-[9px]">
-                  {getInitials(reply.sender.name)}
-                </AvatarFallback>
-              </Avatar>
+            <div
+              key={reply.id}
+              className="flex items-start gap-2.5 px-4 py-3"
+            >
+              <MemberAvatarHoverCard
+                memberId={reply.sender.community_member_id}
+                memberName={reply.sender.name}
+                avatarUrl={reply.sender.avatar_url}
+              >
+                <button
+                  type="button"
+                  className="shrink-0"
+                  onClick={() =>
+                    onOpenProfile(
+                      reply.sender.community_member_id,
+                      reply.sender.name,
+                      reply.sender.avatar_url,
+                    )
+                  }
+                >
+                  <Avatar className="h-8 w-8 self-start">
+                    <AvatarImage
+                      src={reply.sender.avatar_url || undefined}
+                    />
+                    <AvatarFallback className="text-[9px]">
+                      {getInitials(reply.sender.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </MemberAvatarHoverCard>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{reply.sender.name}</span>
@@ -887,17 +989,43 @@ function ThreadPanel({
   );
 }
 
-function ParticipantRow({ participant, online }: { participant: Participant; online: boolean }) {
+function ParticipantRow({
+  participant,
+  online,
+  onOpenProfile,
+}: {
+  participant: Participant;
+  online: boolean;
+  onOpenProfile: (memberId: number, name: string, avatarUrl: string | null) => void;
+}) {
   const isAdmin = participant.admin || participant.community_admin;
+  const memberId = participant.community_member_id || participant.id;
   return (
     <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50">
       <div className="relative">
-        <Avatar className="h-7 w-7">
-          <AvatarImage src={participant.avatar_url || undefined} />
-          <AvatarFallback className="text-[9px]">
-            {getInitials(participant.name)}
-          </AvatarFallback>
-        </Avatar>
+        <MemberAvatarHoverCard
+          memberId={memberId}
+          memberName={participant.name}
+          avatarUrl={participant.avatar_url}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              onOpenProfile(
+                memberId,
+                participant.name,
+                participant.avatar_url,
+              )
+            }
+          >
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={participant.avatar_url || undefined} />
+              <AvatarFallback className="text-[9px]">
+                {getInitials(participant.name)}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+        </MemberAvatarHoverCard>
         <div
           className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card ${online ? "bg-green-500" : "bg-gray-400"}`}
         />

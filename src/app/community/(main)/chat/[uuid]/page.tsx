@@ -34,6 +34,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { renderTiptapToHtml } from "@/lib/tiptap-renderer";
 import { RichText } from "@/components/community/RichText";
+import { MemberProfileDialog } from "@/components/community/MemberProfileDialog";
+import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -304,16 +306,36 @@ function ThreadPanel({
             const sender = reply.sender || reply.community_member;
             const name = sender?.name || reply.sender_name || "Unknown";
             const avatar = sender?.avatar_url || reply.sender_avatar_url;
+            const senderMemberId =
+              (sender as any)?.community_member_id || (sender as any)?.id;
             const body = typeof reply.body === "string" ? reply.body : null;
 
             return (
-              <div key={reply.id} className="flex gap-2.5 px-4 py-3">
-                <Avatar className="mt-0.5 h-8 w-8 shrink-0">
-                  <AvatarImage src={safeAvatarUrl(avatar)} />
-                  <AvatarFallback className="text-[9px]">
-                    {getInitials(name)}
-                  </AvatarFallback>
-                </Avatar>
+              <div
+                key={reply.id}
+                className="flex items-start gap-2.5 px-4 py-3"
+              >
+                {senderMemberId ? (
+                  <MemberAvatarHoverCard
+                    memberId={senderMemberId}
+                    memberName={name}
+                    avatarUrl={avatar || null}
+                  >
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={safeAvatarUrl(avatar)} />
+                      <AvatarFallback className="text-[9px]">
+                        {getInitials(name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </MemberAvatarHoverCard>
+                ) : (
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage src={safeAvatarUrl(avatar)} />
+                    <AvatarFallback className="text-[9px]">
+                      {getInitials(name)}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">{name}</span>
@@ -354,6 +376,7 @@ function MessageItem({
   expandedThreadId,
   onToggleThread,
   onReply,
+  onOpenProfile,
 }: {
   msg: ChatMessage;
   messages: ChatMessage[];
@@ -364,6 +387,7 @@ function MessageItem({
   expandedThreadId: number | null;
   onToggleThread: (messageId: number, threadId: number | null) => void;
   onReply: (message: ChatMessage) => void;
+  onOpenProfile: (memberId: number, name?: string, avatarUrl?: string | null) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const grouped = shouldGroupWithPrevious(messages, index);
@@ -372,6 +396,7 @@ function MessageItem({
   const name = sender?.name || msg.sender_name || "Unknown";
   const avatar = sender?.avatar_url || msg.sender_avatar_url;
   const initials = getInitials(name);
+  const memberId = msg.sender?.community_member_id || msg.community_member?.id;
 
   const bodyText = typeof msg.body === "string" ? msg.body : null;
   const time = formatMessageTime(msg.sent_at || msg.created_at);
@@ -455,16 +480,41 @@ function MessageItem({
           </div>
         )}
 
-        <div className="flex gap-2.5">
+        <div className="flex items-start gap-2.5">
           {grouped ? (
-            <div className="w-8 shrink-0" />
+            <div className="w-8 shrink-0 self-start" />
           ) : (
-            <Avatar className="mt-0.5 h-8 w-8 shrink-0">
-              <AvatarImage src={safeAvatarUrl(avatar)} />
-              <AvatarFallback className="text-[10px]">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            memberId ? (
+              <MemberAvatarHoverCard
+                memberId={memberId}
+                memberName={name}
+                avatarUrl={avatar || null}
+              >
+                <button
+                  type="button"
+                  className="shrink-0"
+                  onClick={() => {
+                    onOpenProfile(memberId, name, avatar || null);
+                  }}
+                >
+                  <Avatar className="h-8 w-8 self-start">
+                    <AvatarImage src={safeAvatarUrl(avatar)} />
+                    <AvatarFallback className="text-[10px]">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </MemberAvatarHoverCard>
+            ) : (
+              <button type="button" className="shrink-0" disabled>
+                <Avatar className="h-8 w-8 self-start">
+                  <AvatarImage src={safeAvatarUrl(avatar)} />
+                  <AvatarFallback className="text-[10px]">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            )
           )}
 
           <div className="min-w-0 flex-1">
@@ -511,17 +561,19 @@ function MessageItem({
                 <div className="flex -space-x-1.5">
                   {(threadPreview.length > 0
                     ? threadPreview.slice(0, 3).map((p) => (
-                        <Avatar
+                        <button
                           key={p.id}
-                          className="h-4 w-4 border border-background"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenProfile(p.community_member_id, p.name, p.avatar_url || null);
+                          }}
                         >
-                          <AvatarImage
-                            src={safeAvatarUrl(p.avatar_url)}
-                          />
-                          <AvatarFallback className="text-[6px]">
-                            {p.name?.[0] || "?"}
-                          </AvatarFallback>
-                        </Avatar>
+                          <Avatar className="h-4 w-4 border border-background">
+                            <AvatarImage src={safeAvatarUrl(p.avatar_url)} />
+                            <AvatarFallback className="text-[6px]">{p.name?.[0] || "?"}</AvatarFallback>
+                          </Avatar>
+                        </button>
                       ))
                     : threadAvatars.slice(0, 3).map((url, i) => (
                         <Avatar
@@ -567,6 +619,10 @@ export default function ChatRoomPage() {
     null,
   );
   const [replyToId, setReplyToId] = useState<number | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMemberId, setProfileMemberId] = useState<number | null>(null);
+  const [profileInitialName, setProfileInitialName] = useState<string | undefined>(undefined);
+  const [profileInitialAvatar, setProfileInitialAvatar] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCount = useRef(0);
@@ -671,14 +727,19 @@ export default function ChatRoomPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...(replyToId ? { parent_message_id: replyToId } : {}),
+          // Headless API expects { rich_text_body: { body: TipTapDoc, ... } }
           rich_text_body: {
-            type: "doc",
-            content: [
-              {
-                type: "paragraph",
-                content: [{ type: "text", text: messageText }],
-              },
-            ],
+            body: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: messageText }],
+                },
+              ],
+            },
+            circle_ios_fallback_text: messageText,
+            attachments: [],
           },
         }),
       });
@@ -731,6 +792,15 @@ export default function ChatRoomPage() {
 
   return (
     <div className="flex h-full flex-col bg-background">
+      {profileMemberId != null && (
+        <MemberProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          memberId={profileMemberId}
+          initialName={profileInitialName}
+          initialAvatarUrl={profileInitialAvatar}
+        />
+      )}
       <div className="flex shrink-0 items-center gap-3 border-b bg-card px-4 py-3">
         <Link
           href="/community/chat"
@@ -813,6 +883,12 @@ export default function ChatRoomPage() {
                       setExpandedThreadId(m.id);
                       setReplyToId(m.id);
                       requestAnimationFrame(() => textareaRef.current?.focus());
+                    }}
+                    onOpenProfile={(memberId, name, avatarUrl) => {
+                      setProfileMemberId(memberId);
+                      setProfileInitialName(name);
+                      setProfileInitialAvatar(avatarUrl || null);
+                      setProfileOpen(true);
                     }}
                   />
                   {expandedThreadId === msg.id &&

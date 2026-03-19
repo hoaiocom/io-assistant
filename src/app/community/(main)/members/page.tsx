@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDebounce } from "@/hooks/use-debounce";
+import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -70,15 +71,23 @@ function MemberCard({ member }: { member: MemberItem }) {
     member.can_receive_dm_from_current_member && member.messaging_enabled;
   const location = member.profile_info?.location;
 
+  if (!memberId) return null;
+
   return (
     <div className="group flex flex-col items-center rounded-xl border bg-card p-5 text-center transition-shadow hover:shadow-sm">
       <Link href={`/community/members/${memberId}`} className="flex flex-col items-center">
-        <Avatar className="h-20 w-20 ring-2 ring-background transition-transform group-hover:scale-105">
-          <AvatarImage src={member.avatar_url || undefined} />
-          <AvatarFallback className="text-lg bg-primary/10 text-primary">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <MemberAvatarHoverCard
+          memberId={memberId}
+          memberName={member.name}
+          avatarUrl={member.avatar_url || null}
+        >
+          <Avatar className="h-20 w-20 ring-2 ring-background transition-transform group-hover:scale-105">
+            <AvatarImage src={member.avatar_url || undefined} />
+            <AvatarFallback className="text-lg bg-primary/10 text-primary">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </MemberAvatarHoverCard>
 
         <h3 className="mt-3 text-sm font-semibold leading-snug group-hover:text-primary transition-colors">
           {member.name}

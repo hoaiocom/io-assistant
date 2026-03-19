@@ -156,12 +156,72 @@ export default function SpaceDetailPage() {
     return <EventSpaceView space={space} spaceId={id} />;
   }
 
+  if (spaceLoading) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-6 w-6 rounded-md" />
+              <Skeleton className="h-7 w-56" />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+          </div>
+          <div className="hidden sm:block">
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl border bg-card p-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-9 w-9 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-3.5 w-28" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="mt-4 h-4 w-11/12" />
+                <Skeleton className="mt-2 h-4 w-10/12" />
+                <Skeleton className="mt-2 h-4 w-7/12" />
+              </div>
+            ))}
+          </div>
+
+          <aside className="hidden lg:block">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-10" />
+              </div>
+              <Skeleton className="mt-4 h-3 w-full" />
+              <Skeleton className="mt-2 h-3 w-10/12" />
+              <Skeleton className="mt-2 h-3 w-8/12" />
+              <div className="mt-5 space-y-2">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <Skeleton className="h-7 w-7 rounded-full" />
+                    <Skeleton className="h-3.5 w-32" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
       {/* Space header */}
       {spaceLoading ? (
         <div className="mb-6">
-          <Skeleton className="aspect-[3/1] w-full rounded-xl mb-4" />
           <Skeleton className="h-7 w-48 mb-2" />
           <Skeleton className="h-4 w-32" />
         </div>

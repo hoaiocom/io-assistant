@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { format, formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 import {
   Calendar,
   MapPin,
@@ -60,6 +61,7 @@ interface EventPost {
   cardview_image?: string | null;
   created_at: string;
   space_id?: number;
+  space?: { id: number; slug?: string; name?: string };
   event_setting_attributes?: EventSettings;
   event_settings_attributes?: EventSettings;
   event_type?: string;
@@ -186,6 +188,8 @@ function FeaturedEventCard({
   event: EventPost;
   onRsvp: (id: number) => void;
 }) {
+  const sid = event.space?.id || event.space_id;
+  const eventHref = sid ? `/community/spaces/${sid}/posts/${event.id}` : "#";
   const settings = getEventSettings(event);
   const title = event.display_title || event.name || "Untitled Event";
   const startsAt = settings?.starts_at ? new Date(settings.starts_at) : null;
@@ -207,15 +211,19 @@ function FeaturedEventCard({
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       {cover && (
-        <div className="relative aspect-[2.5/1] overflow-hidden">
-          <img src={cover} alt="" className="h-full w-full object-cover" />
-        </div>
+        <Link href={eventHref} className="block">
+          <div className="relative aspect-[2.5/1] overflow-hidden">
+            <img src={cover} alt="" className="h-full w-full object-cover" />
+          </div>
+        </Link>
       )}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug sm:text-lg">
-            {title}
-          </h3>
+          <Link href={eventHref} className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold leading-snug sm:text-lg hover:underline">
+              {title}
+            </h3>
+          </Link>
           <div className="flex shrink-0 items-center gap-1.5">
             <RsvpButton event={event} onRsvp={onRsvp} />
             <DropdownMenu>
@@ -282,6 +290,8 @@ function CompactEventCard({
   event: EventPost;
   onRsvp: (id: number) => void;
 }) {
+  const sid = event.space?.id || event.space_id;
+  const eventHref = sid ? `/community/spaces/${sid}/posts/${event.id}` : "#";
   const settings = getEventSettings(event);
   const title = event.display_title || event.name || "Untitled Event";
   const startsAt = settings?.starts_at ? new Date(settings.starts_at) : null;
@@ -296,15 +306,20 @@ function CompactEventCard({
   return (
     <div className="flex gap-4 rounded-xl border bg-card p-3 transition-shadow hover:shadow-sm sm:p-4">
       {cover && (
-        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-24">
+        <Link
+          href={eventHref}
+          className="h-20 w-20 shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-24"
+        >
           <img src={cover} alt="" className="h-full w-full object-cover" />
-        </div>
+        </Link>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug">
-            {title}
-          </h3>
+          <Link href={eventHref} className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold leading-snug hover:underline">
+              {title}
+            </h3>
+          </Link>
           <div className="flex shrink-0 items-center gap-1">
             <RsvpButton event={event} onRsvp={onRsvp} />
             <DropdownMenu>
@@ -363,7 +378,9 @@ export function EventSpaceView({ space, spaceId }: EventSpaceViewProps) {
     isLoading,
     mutate,
   } = useSWR(
-    `/api/community/spaces/${spaceId}/posts?per_page=50&past_events=true`,
+    `/api/community/spaces/${spaceId}/posts?per_page=50&past_events=${
+      timeFilter === "past" ? "true" : "false"
+    }`,
     fetcher,
     { revalidateOnFocus: false },
   );

@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getTiptapPlainText } from "@/lib/tiptap-renderer";
 import { toast } from "sonner";
+import { MemberAvatarHoverCard } from "@/components/community/MemberAvatarHoverCard";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -365,16 +366,38 @@ function ConversationList({
                     )}
                   >
                     <div className="relative shrink-0">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage
-                          src={safeAvatarUrl(firstOther?.avatar_url)}
-                        />
-                        <AvatarFallback className="text-xs">
-                          {getInitials(
-                            firstOther?.name || displayName,
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
+                      {firstOther?.community_member_id ||
+                      firstOther?.id ? (
+                        <MemberAvatarHoverCard
+                          memberId={
+                            firstOther?.community_member_id || firstOther?.id
+                          }
+                          memberName={
+                            firstOther?.name || displayName
+                          }
+                          avatarUrl={firstOther?.avatar_url || null}
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage
+                              src={safeAvatarUrl(firstOther?.avatar_url)}
+                            />
+                            <AvatarFallback className="text-xs">
+                              {getInitials(
+                                firstOther?.name || displayName,
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                        </MemberAvatarHoverCard>
+                      ) : (
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage
+                            src={safeAvatarUrl(firstOther?.avatar_url)}
+                          />
+                          <AvatarFallback className="text-xs">
+                            {getInitials(firstOther?.name || displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <OnlineIndicator status={firstOther?.status} />
                     </div>
 

@@ -15,6 +15,62 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+function toTitle(label: string) {
+  return label
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeHttpUrl(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(v)) return `https://${v}`;
+  return null;
+}
+
+function isEmail(value: string): boolean {
+  const v = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function Value({
+  value,
+  icon,
+}: {
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  const href = normalizeHttpUrl(value);
+  const mail = !href && isEmail(value);
+  return (
+    <span className="flex items-center gap-1.5">
+      {icon}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground underline underline-offset-2"
+        >
+          {value}
+        </a>
+      ) : mail ? (
+        <a
+          href={`mailto:${value.trim()}`}
+          className="hover:text-foreground underline underline-offset-2"
+        >
+          {value}
+        </a>
+      ) : (
+        <span>{value}</span>
+      )}
+    </span>
+  );
+}
+
 export default function MyProfilePage() {
   const { data: profile, isLoading } = useSWR(
     "/api/community/profile",
@@ -84,28 +140,26 @@ export default function MyProfilePage() {
 
           <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
             {profile.email && (
-              <span className="flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" />
-                {profile.email}
-              </span>
+              <Value value={profile.email} icon={<Mail className="h-3.5 w-3.5" />} />
             )}
-            {profile.profile_info?.location && (
-              <span className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" />
-                {profile.profile_info.location}
-              </span>
-            )}
-            {profile.profile_info?.website && (
-              <a
-                href={profile.profile_info.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:text-foreground"
-              >
-                <Globe className="h-3.5 w-3.5" />
-                Website
-              </a>
-            )}
+            {profile.profile_info &&
+              Object.entries(profile.profile_info as Record<string, unknown>)
+                .filter(([, v]) => typeof v === "string" && v.trim().length > 0)
+                .map(([k, v]) => (
+                  <Value
+                    key={k}
+                    value={String(v)}
+                    icon={
+                      k === "location" ? (
+                        <MapPin className="h-3.5 w-3.5" />
+                      ) : k === "website" ? (
+                        <Globe className="h-3.5 w-3.5" />
+                      ) : (
+                        <Globe className="h-3.5 w-3.5 opacity-60" />
+                      )
+                    }
+                  />
+                ))}
           </div>
 
           {profile.member_tags && profile.member_tags.length > 0 && (
@@ -171,6 +225,92 @@ export default function MyProfilePage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {(profile.profile_fields?.visible?.length ||
+            profile.profile_fields?.not_visible?.length) && (
+            <div className="mt-5 rounded-lg border bg-card p-4">
+              <h3 className="text-sm font-semibold">Profile fields</h3>
+
+              {Array.isArray(profile.profile_fields?.visible) &&
+                profile.profile_fields.visible.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {profile.profile_fields.visible.map((f: any) => {
+                      const label = f?.label || f?.key || "Field";
+                      const display =
+                        f?.community_member_profile_field?.display_value ??
+                        f?.community_member_profile_field?.text ??
+                        f?.community_member_profile_field?.textarea ??
+                        "";
+                      const choices = Array.isArray(f?.community_member_profile_field?.community_member_choices)
+                        ? f.community_member_profile_field.community_member_choices
+                            .map((c: any) => c?.profile_field_choice?.value || c?.value)
+                            .filter(Boolean)
+                        : [];
+                      const value =
+                        typeof display === "string" && display.trim()
+                          ? display
+                          : choices.length > 0
+                            ? choices.join(", ")
+                            : "";
+                      if (!value) return null;
+                      return (
+                        <div key={f?.id || f?.key || label}>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {toTitle(String(label))}
+                          </p>
+                          <p className="mt-1 text-sm">
+                            <Value value={String(value)} />
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+              {Array.isArray(profile.profile_fields?.not_visible) &&
+                profile.profile_fields.not_visible.length > 0 && (
+                  <div className="mt-4 border-t pt-4">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Private fields
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {profile.profile_fields.not_visible.map((f: any) => {
+                        const label = f?.label || f?.key || "Field";
+                        const display =
+                          f?.community_member_profile_field?.display_value ??
+                          f?.community_member_profile_field?.text ??
+                          f?.community_member_profile_field?.textarea ??
+                          "";
+                        const choices = Array.isArray(
+                          f?.community_member_profile_field?.community_member_choices,
+                        )
+                          ? f.community_member_profile_field.community_member_choices
+                              .map((c: any) => c?.profile_field_choice?.value || c?.value)
+                              .filter(Boolean)
+                          : [];
+                        const value =
+                          typeof display === "string" && display.trim()
+                            ? display
+                            : choices.length > 0
+                              ? choices.join(", ")
+                              : "";
+                        if (!value) return null;
+                        return (
+                          <div key={f?.id || f?.key || label}>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {toTitle(String(label))}
+                            </p>
+                            <p className="mt-1 text-sm">
+                              <Value value={String(value)} />
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
             </div>
           )}
         </div>

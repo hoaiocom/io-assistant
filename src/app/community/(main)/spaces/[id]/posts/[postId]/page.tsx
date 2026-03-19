@@ -15,6 +15,8 @@ import {
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
+  Calendar,
+  MapPin,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { resolveBodyHtml } from "@/lib/tiptap-renderer";
+import { RichText } from "@/components/community/RichText";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -542,6 +545,23 @@ export default function PostDetailPage() {
   const isCommentsEnabled = post.is_comments_enabled ?? true;
   const isLikingEnabled = post.is_liking_enabled ?? true;
   const isPinned = post.is_pinned_at_top_of_space ?? false;
+  const eventSettings =
+    (post as any).event_setting_attributes ||
+    (post as any).event_settings_attributes ||
+    null;
+  const startsAt =
+    eventSettings?.starts_at ? new Date(eventSettings.starts_at) : null;
+  const endsAt =
+    eventSettings?.ends_at ? new Date(eventSettings.ends_at) : null;
+  const locationType = eventSettings?.location_type as string | undefined;
+  const locationLabel =
+    locationType === "virtual"
+      ? "Live Stream"
+      : locationType === "live_room"
+        ? "Live room"
+        : eventSettings?.in_person_location || null;
+  const locationUrl =
+    (eventSettings?.virtual_location_url as string | undefined) || null;
 
   return (
     <div className="mx-auto max-w-[680px] px-4 py-6 sm:px-6">
@@ -687,16 +707,48 @@ export default function PostDetailPage() {
             </div>
           )}
 
-          {/* Body content */}
-          {bodyHtml ? (
-            <div
-              className="post-body"
-              dangerouslySetInnerHTML={{ __html: bodyHtml }}
-            />
-          ) : bodyText ? (
-            <div className="whitespace-pre-wrap text-[0.9375rem] leading-[1.75]">
-              {bodyText}
+          {/* Event meta (for event posts) */}
+          {eventSettings && (
+            <div className="mb-5 rounded-lg border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                {startsAt && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>
+                      {format(startsAt, "EEEE, MMM d")} ·{" "}
+                      {format(startsAt, "h:mm a")}
+                      {endsAt ? ` – ${format(endsAt, "h:mm a")}` : ""}
+                    </span>
+                  </div>
+                )}
+                {locationLabel && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    {locationUrl ? (
+                      <a
+                        href={locationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-foreground"
+                      >
+                        {locationLabel}
+                      </a>
+                    ) : (
+                      <span>{locationLabel}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
+          )}
+
+          {/* Body content */}
+          {(bodyHtml || post.tiptap_body || bodyText) ? (
+            <RichText
+              tiptap={(post as any).tiptap_body}
+              html={bodyHtml}
+              text={bodyText}
+            />
           ) : null}
 
           {/* Topics */}

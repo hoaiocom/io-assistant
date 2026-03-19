@@ -9,11 +9,17 @@ export async function GET(req: NextRequest) {
     const page = Number(searchParams.get("page")) || 1;
     const per_page = Number(searchParams.get("per_page")) || 50;
     const past_events = searchParams.get("past_events") === "true";
+    const status = searchParams.get("status") || undefined;
+    const filter_date_start = searchParams.get("filter_date[start_date]") || undefined;
+    const filter_date_end = searchParams.get("filter_date[end_date]") || undefined;
 
     const data = await getCommunityEvents(session.accessToken, {
       page,
       per_page,
       past_events,
+      status,
+      filter_date_start,
+      filter_date_end,
     });
     return NextResponse.json(data);
   } catch (error) {

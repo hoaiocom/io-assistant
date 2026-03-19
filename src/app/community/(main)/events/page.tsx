@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { format, formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 import {
   Calendar,
   MapPin,
@@ -208,6 +209,7 @@ function FeaturedEventCard({
   event: EventPost;
   onRsvp: (id: number) => void;
 }) {
+  const eventHref = `/community/spaces/${event.space?.id || event.space_id || ""}/posts/${event.id}`;
   const settings = getEventSettings(event);
   const title = event.display_title || event.name || "Untitled Event";
   const startsAt = settings?.starts_at ? new Date(settings.starts_at) : null;
@@ -233,15 +235,19 @@ function FeaturedEventCard({
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       {cover && (
-        <div className="relative aspect-[2.5/1] overflow-hidden">
-          <img src={cover} alt="" className="h-full w-full object-cover" />
-        </div>
+        <Link href={eventHref} className="block">
+          <div className="relative aspect-[2.5/1] overflow-hidden">
+            <img src={cover} alt="" className="h-full w-full object-cover" />
+          </div>
+        </Link>
       )}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug sm:text-lg">
-            {title}
-          </h3>
+          <Link href={eventHref} className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold leading-snug sm:text-lg hover:underline">
+              {title}
+            </h3>
+          </Link>
           <div className="flex shrink-0 items-center gap-1.5">
             <RsvpButton event={event} onRsvp={onRsvp} />
             <DropdownMenu>
@@ -308,6 +314,7 @@ function CompactEventCard({
   event: EventPost;
   onRsvp: (id: number) => void;
 }) {
+  const eventHref = `/community/spaces/${event.space?.id || event.space_id || ""}/posts/${event.id}`;
   const settings = getEventSettings(event);
   const title = event.display_title || event.name || "Untitled Event";
   const startsAt = settings?.starts_at ? new Date(settings.starts_at) : null;
@@ -324,15 +331,20 @@ function CompactEventCard({
   return (
     <div className="flex gap-4 rounded-xl border bg-card p-3 transition-shadow hover:shadow-sm sm:p-4">
       {cover && (
-        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-24">
+        <Link
+          href={eventHref}
+          className="h-20 w-20 shrink-0 overflow-hidden rounded-lg sm:h-24 sm:w-24"
+        >
           <img src={cover} alt="" className="h-full w-full object-cover" />
-        </div>
+        </Link>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug">
-            {title}
-          </h3>
+          <Link href={eventHref} className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold leading-snug hover:underline">
+              {title}
+            </h3>
+          </Link>
           <div className="flex shrink-0 items-center gap-1">
             <RsvpButton event={event} onRsvp={onRsvp} />
             <DropdownMenu>
@@ -385,22 +397,19 @@ export default function EventsPage() {
   }, [spacesData]);
 
   const hasMultipleSpaces = eventSpaces.length > 1;
-  const firstSpaceId = eventSpaces[0]?.id;
 
-  // Fetch all events (upcoming + past) from the primary event space
+  // Fetch events from Headless community_events (per swagger).
   const {
     data: postsData,
     isLoading: postsLoading,
     mutate,
   } = useSWR(
-    firstSpaceId
-      ? `/api/community/spaces/${firstSpaceId}/posts?per_page=50&past_events=true`
-      : null,
+    `/api/community/events?per_page=50&past_events=${timeFilter === "past" ? "true" : "false"}`,
     fetcher,
     { revalidateOnFocus: false },
   );
 
-  const isLoading = !spacesData || (!!firstSpaceId && postsLoading);
+  const isLoading = !spacesData || postsLoading;
 
   const allEvents: EventPost[] = useMemo(
     () => postsData?.records || [],
@@ -448,45 +457,32 @@ export default function EventsPage() {
     return allEvents;
   }, [allEvents, selectedFilter]);
 
-  const now = useMemo(() => new Date(), []);
+  const upcomingEvents = useMemo(() => {
+    const list = filteredEvents.slice();
+    return list.sort((a, b) => {
+      const aD = getEventSettings(a)?.starts_at || "";
+      const bD = getEventSettings(b)?.starts_at || "";
+      return new Date(aD).getTime() - new Date(bD).getTime();
+    });
+  }, [filteredEvents]);
 
-  const upcomingEvents = useMemo(
-    () =>
-      filteredEvents
-        .filter((e) => {
-          const startsAt = getEventSettings(e)?.starts_at;
-          if (!startsAt) return true;
-          return new Date(startsAt) > now;
-        })
-        .sort((a, b) => {
-          const aD = getEventSettings(a)?.starts_at || "";
-          const bD = getEventSettings(b)?.starts_at || "";
-          return new Date(aD).getTime() - new Date(bD).getTime();
-        }),
-    [filteredEvents, now],
-  );
+  const pastEvents = useMemo(() => {
+    const list = filteredEvents.slice();
+    return list.sort((a, b) => {
+      const aD = getEventSettings(a)?.starts_at || a.created_at;
+      const bD = getEventSettings(b)?.starts_at || b.created_at;
+      return new Date(bD).getTime() - new Date(aD).getTime();
+    });
+  }, [filteredEvents]);
 
-  const pastEvents = useMemo(
-    () =>
-      filteredEvents
-        .filter((e) => {
-          const startsAt = getEventSettings(e)?.starts_at;
-          return startsAt && new Date(startsAt) <= now;
-        })
-        .sort((a, b) => {
-          const aD = getEventSettings(a)?.starts_at || a.created_at;
-          const bD = getEventSettings(b)?.starts_at || b.created_at;
-          return new Date(bD).getTime() - new Date(aD).getTime();
-        }),
-    [filteredEvents, now],
-  );
-
-  // Auto-switch to Past tab if no upcoming events exist
+  // Keep a sane default, but never force-switch after user choice.
   useEffect(() => {
-    if (!isLoading && upcomingEvents.length === 0 && pastEvents.length > 0) {
+    if (!isLoading && timeFilter === "upcoming" && upcomingEvents.length === 0) {
+      // If there are genuinely no upcoming events, show past.
       setTimeFilter("past");
     }
-  }, [isLoading, upcomingEvents.length, pastEvents.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   const displayEvents =
     timeFilter === "upcoming" ? upcomingEvents : pastEvents;
