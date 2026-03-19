@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { CornerUpLeft } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { renderTiptapToHtml } from "@/lib/tiptap-renderer";
+import { RichText } from "@/components/community/RichText";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -114,6 +116,7 @@ function normalizeTiptapBody(input: unknown): unknown {
 }
 
 function renderRichTextHtml(richTextBody: unknown): string {
+  // Keep for a couple spots that want HTML string; RichText is preferred.
   const normalized = normalizeTiptapBody(richTextBody);
   return renderTiptapToHtml(normalized);
 }
@@ -301,11 +304,7 @@ function ThreadPanel({
             const sender = reply.sender || reply.community_member;
             const name = sender?.name || reply.sender_name || "Unknown";
             const avatar = sender?.avatar_url || reply.sender_avatar_url;
-            const body = reply.rich_text_body
-              ? renderRichTextHtml(reply.rich_text_body)
-              : typeof reply.body === "string"
-                ? reply.body
-                : "";
+            const body = typeof reply.body === "string" ? reply.body : null;
 
             return (
               <div key={reply.id} className="flex gap-2.5 px-4 py-3">
@@ -322,10 +321,13 @@ function ThreadPanel({
                       {formatMessageTime(reply.sent_at || reply.created_at)}
                     </span>
                   </div>
-                  <div
-                    className="mt-0.5 text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_img]:my-1 [&_img]:max-w-sm [&_img]:rounded-lg [&_p]:mb-0.5 [&_p:last-child]:mb-0"
-                    dangerouslySetInnerHTML={{ __html: body }}
-                  />
+                  <div className="mt-0.5">
+                    <RichText
+                      tiptap={reply.rich_text_body}
+                      html={body}
+                      text={body}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -351,6 +353,7 @@ function MessageItem({
   mutateMessages,
   expandedThreadId,
   onToggleThread,
+  onReply,
 }: {
   msg: ChatMessage;
   messages: ChatMessage[];
@@ -360,6 +363,7 @@ function MessageItem({
   mutateMessages: () => void;
   expandedThreadId: number | null;
   onToggleThread: (messageId: number, threadId: number | null) => void;
+  onReply: (message: ChatMessage) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const grouped = shouldGroupWithPrevious(messages, index);
@@ -369,11 +373,7 @@ function MessageItem({
   const avatar = sender?.avatar_url || msg.sender_avatar_url;
   const initials = getInitials(name);
 
-  const richHtml = msg.rich_text_body
-    ? renderRichTextHtml(msg.rich_text_body)
-    : "";
-  const body =
-    richHtml || (typeof msg.body === "string" ? msg.body : "");
+  const bodyText = typeof msg.body === "string" ? msg.body : null;
   const time = formatMessageTime(msg.sent_at || msg.created_at);
 
   const replyCount =
@@ -438,6 +438,19 @@ function MessageItem({
                   Add reaction
                 </TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => onReply(msg)}
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                  >
+                    <CornerUpLeft className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Reply
+                </TooltipContent>
+              </Tooltip>
             </TooltipProvider>
           </div>
         )}
@@ -469,9 +482,10 @@ function MessageItem({
               </div>
             )}
 
-            <div
-              className="text-sm leading-relaxed [&_p]:my-0 [&_a]:text-primary [&_a]:underline [&_.mention]:font-semibold [&_.mention]:text-primary [&_img]:my-1 [&_img]:max-w-xs [&_img]:rounded-lg [&_pre]:my-1 [&_pre]:rounded-lg [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
-              dangerouslySetInnerHTML={{ __html: body }}
+            <RichText
+              tiptap={msg.rich_text_body}
+              html={bodyText}
+              text={bodyText}
             />
 
             {reactions.length > 0 && (
@@ -552,6 +566,7 @@ export default function ChatRoomPage() {
   const [expandedThreadId, setExpandedThreadId] = useState<number | null>(
     null,
   );
+  const [replyToId, setReplyToId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCount = useRef(0);
@@ -655,6 +670,7 @@ export default function ChatRoomPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(replyToId ? { parent_message_id: replyToId } : {}),
           rich_text_body: {
             type: "doc",
             content: [
@@ -667,6 +683,7 @@ export default function ChatRoomPage() {
         }),
       });
       setMessageText("");
+      setReplyToId(null);
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
@@ -792,6 +809,11 @@ export default function ChatRoomPage() {
                     mutateMessages={mutate}
                     expandedThreadId={expandedThreadId}
                     onToggleThread={handleToggleThread}
+                    onReply={(m) => {
+                      setExpandedThreadId(m.id);
+                      setReplyToId(m.id);
+                      requestAnimationFrame(() => textareaRef.current?.focus());
+                    }}
                   />
                   {expandedThreadId === msg.id &&
                     (msg.replies_count || msg.chat_thread_replies_count || 0) > 0 && (
@@ -815,6 +837,18 @@ export default function ChatRoomPage() {
       </div>
 
       <div className="shrink-0 border-t bg-card px-4 py-3">
+        {replyToId && (
+          <div className="mb-2 flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">Replying in thread</span>
+            <button
+              type="button"
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => setReplyToId(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         <form
           onSubmit={handleSend}
           className="flex items-end gap-2"

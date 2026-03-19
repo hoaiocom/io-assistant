@@ -26,12 +26,15 @@ import {
   Loader2,
   ChevronUp,
   ChevronDown,
+  CornerUpLeft,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { RichText } from "@/components/community/RichText";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -165,9 +168,15 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const [oldestId, setOldestId] = useState<number | null>(null);
   const [expandedThreads, setExpandedThreads] = useState<Set<number>>(new Set());
+  const [replyToId, setReplyToId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const initialScrollDone = useRef(false);
+  const { data: authData } = useSWR("/api/community/auth", fetcher, {
+    revalidateOnFocus: false,
+  });
+  const currentMemberId = authData?.communityMemberId as number | undefined;
+
 
   const {
     data: messagesData,
@@ -354,6 +363,18 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
     });
   }, []);
 
+  const startReply = useCallback(
+    (messageId: number) => {
+      setExpandedThreads((prev) => {
+        const next = new Set(prev);
+        next.add(messageId);
+        return next;
+      });
+      setReplyToId(messageId);
+    },
+    [],
+  );
+
   // Send message
   const handleSend = useCallback(
     async (e: React.FormEvent) => {
@@ -365,6 +386,7 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            ...(replyToId ? { parent_message_id: replyToId } : {}),
             rich_text_body: {
               type: "doc",
               content: [
@@ -374,6 +396,7 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
           }),
         });
         setMessageText("");
+        setReplyToId(null);
         mutate();
       } catch {
         toast.error("Failed to send message");
@@ -381,7 +404,7 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
         setSending(false);
       }
     },
-    [messageText, spaceId, mutate],
+    [messageText, spaceId, mutate, replyToId],
   );
 
   const hasError = !!messagesError || messagesData?.error;
@@ -475,6 +498,21 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
                           threadCount={totalReplies}
                           isExpanded={isExpanded}
                           onToggleThread={() => toggleThread(msg.id)}
+                          onReply={() => startReply(msg.id)}
+                          currentMemberId={currentMemberId}
+                          onToggleReaction={(message, emoji) => {
+                            const existing = (message.reactions || []).find((r) => r.emoji === emoji);
+                            const isActive =
+                              currentMemberId != null &&
+                              existing?.community_member_ids?.includes(currentMemberId);
+                            fetch("/api/community/reactions", {
+                              method: isActive ? "DELETE" : "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ chat_room_message: message.id, emoji }),
+                            })
+                              .then(() => mutate())
+                              .catch(() => toast.error("Failed to update reaction"));
+                          }}
                         />
                         {isExpanded && totalReplies > 0 && (
                           <ThreadPanel
@@ -495,6 +533,18 @@ export function ChatSpaceView({ space, spaceId }: ChatSpaceViewProps) {
 
         {/* Message input */}
         <div className="border-t bg-card px-5 py-3">
+          {replyToId && (
+            <div className="mb-2 flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+              <span className="text-xs text-muted-foreground">Replying in thread</span>
+              <button
+                type="button"
+                className="text-xs font-medium text-blue-600 hover:underline"
+                onClick={() => setReplyToId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           <form onSubmit={handleSend}>
             <input
               value={messageText}
@@ -579,19 +629,60 @@ function ChatMessageItem({
   threadCount,
   isExpanded,
   onToggleThread,
+  onReply,
+  currentMemberId,
+  onToggleReaction,
 }: {
   message: ChatRoomMessage;
   threadCount: number;
   isExpanded: boolean;
   onToggleThread: () => void;
+  onReply: () => void;
+  currentMemberId?: number;
+  onToggleReaction: (message: ChatRoomMessage, emoji: string) => void;
 }) {
-  const { sender, body, reactions, sent_at, created_at } = message;
+  const { sender, body, reactions, sent_at, created_at, rich_text_body } = message;
   const time = formatMessageTime(sent_at || created_at);
   const initials = getInitials(sender.name);
   const lastReplyAgo = safeTimeAgo(message.last_reply_at);
 
   return (
-    <div className="group flex gap-3">
+    <div className="group relative flex gap-3">
+      {/* Hover action bar */}
+      <div className="pointer-events-none absolute -top-3 right-0 z-10 hidden items-center gap-0.5 rounded-lg border bg-card p-0.5 shadow-sm group-hover:flex">
+        <TooltipProvider delayDuration={200}>
+          {["heart", "thumbsup", "joy", "pray"].map((emoji) => (
+            <Tooltip key={emoji}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onToggleReaction(message, emoji)}
+                  className="pointer-events-auto rounded-md p-1.5 text-sm transition-colors hover:bg-muted"
+                >
+                  {emojiToDisplay(emoji)}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {emoji}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onReply}
+                className="pointer-events-auto rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <CornerUpLeft className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Reply
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <Avatar className="mt-0.5 h-9 w-9 shrink-0">
         <AvatarImage src={sender.avatar_url || undefined} />
         <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
@@ -602,21 +693,22 @@ function ChatMessageItem({
           <span className="text-[11px] text-muted-foreground">{time}</span>
         </div>
 
-        <div
-          className="mt-1 max-w-none text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_img]:my-2 [&_img]:max-w-md [&_img]:rounded-lg [&_p]:mb-1 [&_p:last-child]:mb-0"
-          dangerouslySetInnerHTML={{ __html: body }}
-        />
+        <div className="mt-1">
+          <RichText tiptap={rich_text_body} html={body} text={body} />
+        </div>
 
         {reactions && reactions.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {reactions.map((r) => (
-              <span
+              <button
                 key={r.emoji}
-                className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs"
+                type="button"
+                onClick={() => onToggleReaction(message, r.emoji)}
+                className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs hover:bg-muted"
               >
                 <span>{emojiToDisplay(r.emoji)}</span>
                 <span className="text-muted-foreground">{r.count}</span>
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -715,49 +807,23 @@ function ThreadPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parentMessage.chat_thread_id, parentMessage.id]);
 
-  const replies = fetchedReplies ?? localReplies;
+  const replies = (fetchedReplies ?? localReplies).filter((r) => {
+    if (!r) return false;
+    // Some Circle responses include the parent message in `replies`.
+    if (r.id === parentMessage.id) return false;
+    // Only keep actual replies to this parent when possible.
+    if (r.parent_message_id != null) return r.parent_message_id === parentMessage.id;
+    return true;
+  });
+  const replyCount = replies.length;
 
   return (
     <div className="ml-12 mt-2 rounded-lg border bg-card">
       <div className="flex items-center justify-between border-b px-4 py-2.5">
-        <span className="text-sm font-semibold">Thread</span>
+        <span className="text-sm font-semibold">Replies</span>
         <span className="text-xs text-muted-foreground">
-          {totalReplies} {totalReplies === 1 ? "reply" : "replies"}
+          {replyCount} {replyCount === 1 ? "reply" : "replies"}
         </span>
-      </div>
-
-      <div className="border-b px-4 py-3">
-        <div className="flex gap-2.5">
-          <Avatar className="mt-0.5 h-8 w-8 shrink-0">
-            <AvatarImage src={parentMessage.sender.avatar_url || undefined} />
-            <AvatarFallback className="text-[9px]">
-              {getInitials(parentMessage.sender.name)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">
-                {parentMessage.sender.name}
-              </span>
-              <span className="text-[11px] text-muted-foreground">
-                {formatTimestamp(parentMessage.sent_at || parentMessage.created_at)}
-              </span>
-            </div>
-            {parentMessage.reactions && parentMessage.reactions.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {parentMessage.reactions.map((r) => (
-                  <span
-                    key={r.emoji}
-                    className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-xs"
-                  >
-                    <span>{emojiToDisplay(r.emoji)}</span>
-                    <span className="text-muted-foreground">{r.count}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {loading ? (
@@ -786,10 +852,13 @@ function ThreadPanel({
                     {formatTimestamp(reply.sent_at || reply.created_at)}
                   </span>
                 </div>
-                <div
-                  className="mt-0.5 text-sm leading-relaxed [&_a]:text-blue-600 [&_a]:underline [&_img]:my-1 [&_img]:max-w-sm [&_img]:rounded-lg [&_p]:mb-0.5 [&_p:last-child]:mb-0"
-                  dangerouslySetInnerHTML={{ __html: reply.body }}
-                />
+                <div className="mt-0.5">
+                  <RichText
+                    tiptap={reply.rich_text_body}
+                    html={reply.body}
+                    text={reply.body}
+                  />
+                </div>
                 {reply.reactions && reply.reactions.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {reply.reactions.map((r) => (
@@ -810,7 +879,7 @@ function ThreadPanel({
       ) : (
         <div className="px-4 py-3 text-center">
           <p className="text-xs text-muted-foreground">
-            {totalReplies} {totalReplies === 1 ? "reply" : "replies"} in this thread
+            No replies yet
           </p>
         </div>
       )}
