@@ -8,7 +8,7 @@ import { CommunitySidebar } from "@/components/community/CommunitySidebar";
 export function CommunityShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const isChatRoute = pathname.startsWith("/community/chat");
+  const isChatRoute = pathname.startsWith("/chat");
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">

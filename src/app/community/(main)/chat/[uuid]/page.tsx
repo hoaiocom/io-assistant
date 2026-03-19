@@ -803,7 +803,7 @@ export default function ChatRoomPage() {
       )}
       <div className="flex shrink-0 items-center gap-3 border-b bg-card px-4 py-3">
         <Link
-          href="/community/chat"
+          href="/chat"
           className="text-muted-foreground hover:text-foreground md:hidden"
         >
           <ArrowLeft className="h-5 w-5" />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ export default function CommunityLoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      router.push("/community");
+      router.push("/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -81,6 +82,15 @@ export default function CommunityLoginPage() {
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign in
           </Button>
+
+          <div className="pt-1 text-center">
+            <Link
+              href="/admin/login"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Admin login
+            </Link>
+          </div>
         </form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">

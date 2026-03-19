@@ -126,7 +126,7 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
   const coverImage = post.cover_image || post.cardview_image || post.cover_image_url;
   const excerpt = getExcerpt(post);
   const sid = spaceId || post.space_id || post.space?.id;
-  const postHref = sid ? `/community/spaces/${sid}/posts/${post.id}` : "#";
+  const postHref = sid ? `/spaces/${sid}/posts/${post.id}` : "#";
   const timeAgo = safeTimeAgo(post.published_at || post.created_at);
   const initials = getInitials(authorName);
   const resolvedSpaceName = post.space_name || post.space?.name;
@@ -186,7 +186,7 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <Link
-                href={authorId ? `/community/members/${authorId}` : "#"}
+                href={authorId ? `/members/${authorId}` : "#"}
                 className="text-sm font-semibold hover:underline"
               >
                 {authorName}
@@ -213,7 +213,7 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
             )}
             {showSpaceName && resolvedSpaceName && sid && (
               <Link
-                href={`/community/spaces/${sid}`}
+                href={`/spaces/${sid}`}
                 className="text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
                 {resolvedSpaceName}

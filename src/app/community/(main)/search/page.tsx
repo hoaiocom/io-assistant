@@ -48,7 +48,7 @@ export default function SearchPage() {
 
   useEffect(() => {
     if (debouncedQuery) {
-      router.replace(`/community/search?q=${encodeURIComponent(debouncedQuery)}`, {
+      router.replace(`/search?q=${encodeURIComponent(debouncedQuery)}`, {
         scroll: false,
       });
     }
@@ -104,7 +104,7 @@ export default function SearchPage() {
             const author = result.community_member;
             const authorName = author?.name || result.user_name;
             const href = result.space_id
-              ? `/community/spaces/${result.space_id}/posts/${result.id}`
+              ? `/spaces/${result.space_id}/posts/${result.id}`
               : "#";
 
             return (

@@ -6,6 +6,15 @@ IO Assistant is an admin management tool for the **IO Scholar** community on Cir
 
 **Tech stack:** Next.js 15 (App Router), React 19, shadcn/ui, Tailwind CSS 4, SWR, Recharts, iron-session, Zod
 
+## Canonical references (source of truth)
+
+- `references/INDEX.md` (what to read / where to look)
+- `references/API-MAPPING.md` (features ↔ swagger)
+- Swagger contracts:
+  - Admin: `references/circle/api-docs/admin-API-swagger.yaml` (paths `/api/admin/v2/*`)
+  - Headless Auth: `references/circle/api-docs/auth-swagger.yaml` (paths `/api/v1/headless/*`)
+  - Headless Member: `references/circle/api-docs/headless-client-swagger.yaml` (paths `/api/headless/v1/*`)
+
 ---
 
 ## Project Structure
@@ -258,13 +267,37 @@ io-assistant/
 
 ---
 
-## Future Enhancements
+## Next enhancements (API-aligned backlog)
 
-- WebSocket integration for real-time chat and notifications
-- Custom community frontend using Headless Member API
-- Data visualization with Recharts for analytics
-- Scheduled task runner (cron) for automation rules
-- Email notifications and digest generation
-- Multi-admin support with role-based access
-- Audit logging for all admin actions
-- Export/import functionality for bulk data operations
+These are the next best improvements, scoped explicitly to the supported Circle APIs and the docs in `references/`.
+
+### Headless real-time (WebSockets beta)
+
+- **Goal**: replace polling for chat + notifications with real-time updates where possible.
+- **Reference**: `references/circle/03-websockets-beta.md`
+- **APIs**:
+  - WebSocket server: `wss://app.circle.so/cable`
+  - Auth: per-member Headless access token
+  - Channels: `NotificationChannel`, `ChatRoomChannel`, `Chats::RoomChannel`, `Chats::CommunityMemberThreadsChannel`
+
+### Security & admin operability
+
+- **Multi-admin support (RBAC)**: define roles/permissions and guard dashboard routes + API routes accordingly.
+- **Audit logging**: record admin actions (who did what, when, and on which entity); show an audit viewer in the dashboard.
+- **Secret management**: ensure tokens are never logged; add safe logging patterns for webhook payloads and API errors.
+
+### Automation maturity
+
+- **Scheduled tasks**: cron-like runner for onboarding rules, digests, cleanup jobs (keep all Circle calls server-side).
+- **Webhook processing**: persist incoming events, add idempotency, implement retries and dead-letter queue behavior.
+
+### Analytics & data export
+
+- **More analytics**: deepen health metrics and cohort views derived from Admin API v2 endpoints.
+- **Export/import**: CSV export for members/spaces/posts; optional import workflows (where supported).
+
+### Headless UX completeness
+
+- **Edge-case handling**: token expiry and refresh hardening; improve error states and empty states.
+- **Parity gaps**: systematically compare `/community` features to `headless-client-swagger.yaml` and add missing endpoints/pages.
+

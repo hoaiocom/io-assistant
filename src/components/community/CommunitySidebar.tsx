@@ -105,11 +105,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col">
       <div className="px-3 pt-3">
         <Link
-          href="/community"
+          href="/"
           onClick={onNavigate}
           className={cn(
             "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-            pathname === "/community"
+            pathname === "/"
               ? "bg-primary/10 text-primary"
               : "text-foreground/70 hover:bg-muted/70 hover:text-foreground",
           )}
@@ -141,7 +141,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </h3>
               <div className="space-y-0.5">
                 {groupSpaces.map((space) => {
-                  const href = `/community/spaces/${space.id}`;
+                  const href = `/spaces/${space.id}`;
                   const isActive = pathname === href || pathname.startsWith(`${href}/`);
                   return (
                     <Link

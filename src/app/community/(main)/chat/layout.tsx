@@ -355,7 +355,7 @@ function ConversationList({
                 return (
                   <Link
                     key={room.uuid || room.id}
-                    href={`/community/chat/${room.uuid || room.id}`}
+                    href={`/chat/${room.uuid || room.id}`}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
                       isActive

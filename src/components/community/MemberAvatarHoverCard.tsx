@@ -115,7 +115,7 @@ export function MemberAvatarHoverCard({
     try {
       // If direct room already exists, just navigate to it.
       if (directRoom?.uuid) {
-        router.push(`/community/chat/${directRoom.uuid}`);
+        router.push(`/chat/${directRoom.uuid}`);
         return;
       }
       if (!canMessage) return;
@@ -129,7 +129,7 @@ export function MemberAvatarHoverCard({
       });
       if (!res.ok) return;
       const room = await res.json();
-      if (room?.uuid) router.push(`/community/chat/${room.uuid}`);
+      if (room?.uuid) router.push(`/chat/${room.uuid}`);
     } catch {
       // Swallow hover action errors; errors are usually surfaced via toasts elsewhere.
     }

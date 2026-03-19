@@ -11,7 +11,7 @@ export default async function CommunityLayout({
   const session = await getMemberSession();
 
   if (!session.isLoggedIn) {
-    redirect("/community/login");
+    redirect("/login");
   }
 
   return (

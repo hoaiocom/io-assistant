@@ -30,12 +30,12 @@ import { Badge } from "@/components/ui/badge";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const navItems = [
-  { label: "Community", href: "/community" },
-  { label: "Courses", href: "/community/courses" },
-  { label: "Chat", href: "/community/chat" },
-  { label: "Events", href: "/community/events" },
-  { label: "Leaderboard", href: "/community/leaderboard" },
-  { label: "Members", href: "/community/members" },
+  { label: "Community", href: "/" },
+  { label: "Courses", href: "/courses" },
+  { label: "Chat", href: "/chat" },
+  { label: "Events", href: "/events" },
+  { label: "Leaderboard", href: "/leaderboard" },
+  { label: "Members", href: "/members" },
 ];
 
 interface CommunityHeaderProps {
@@ -66,7 +66,7 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
     setLoggingOut(true);
     try {
       await fetch("/api/community/auth", { method: "DELETE" });
-      router.push("/community/login");
+      router.push("/login");
       router.refresh();
     } catch {
       setLoggingOut(false);
@@ -76,7 +76,7 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/community/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchOpen(false);
     }
   }
@@ -102,7 +102,7 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <Link href="/community" className="mr-2 flex items-center gap-2.5 shrink-0">
+        <Link href="/" className="mr-2 flex items-center gap-2.5 shrink-0">
           <Image
             src="/scholar-favicon-full.png"
             alt="The IO Circle"
@@ -118,8 +118,8 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
         <nav className="hidden items-center gap-0.5 lg:flex ml-2">
           {navItems.map((item) => {
             const isActive =
-              item.href === "/community"
-                ? pathname === "/community"
+              item.href === "/"
+                ? pathname === "/"
                 : pathname.startsWith(item.href);
             return (
               <Link
@@ -164,7 +164,7 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
           </Button>
         )}
 
-        <Link href="/community/notifications">
+        <Link href="/notifications">
           <Button
             variant="ghost"
             size="icon"
@@ -190,13 +190,13 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem asChild>
-              <Link href="/community/profile" className="gap-2">
+              <Link href="/profile" className="gap-2">
                 <User className="h-4 w-4" />
                 My Profile
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/community/bookmarks" className="gap-2">
+              <Link href="/bookmarks" className="gap-2">
                 <Bookmark className="h-4 w-4" />
                 Bookmarks
               </Link>
@@ -221,8 +221,8 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
       <nav className="flex items-center gap-0.5 overflow-x-auto border-t px-4 py-1.5 lg:hidden">
         {navItems.map((item) => {
           const isActive =
-            item.href === "/community"
-              ? pathname === "/community"
+            item.href === "/"
+              ? pathname === "/"
               : pathname.startsWith(item.href);
           return (
             <Link

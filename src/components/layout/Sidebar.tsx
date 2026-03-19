@@ -22,15 +22,15 @@ import {
 } from "@/components/ui/sheet";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { label: "Members", icon: Users, href: "/dashboard/members" },
-  { label: "Spaces", icon: FolderOpen, href: "/dashboard/spaces" },
-  { label: "Posts", icon: FileText, href: "/dashboard/posts" },
-  { label: "Events", icon: Calendar, href: "/dashboard/events" },
-  { label: "Moderation", icon: Shield, href: "/dashboard/moderation" },
-  { label: "Analytics", icon: BarChart3, href: "/dashboard/analytics" },
-  { label: "Automation", icon: Zap, href: "/dashboard/automation" },
-  { label: "Settings", icon: Settings, href: "/dashboard/settings" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+  { label: "Members", icon: Users, href: "/admin/members" },
+  { label: "Spaces", icon: FolderOpen, href: "/admin/spaces" },
+  { label: "Posts", icon: FileText, href: "/admin/posts" },
+  { label: "Events", icon: Calendar, href: "/admin/events" },
+  { label: "Moderation", icon: Shield, href: "/admin/moderation" },
+  { label: "Analytics", icon: BarChart3, href: "/admin/analytics" },
+  { label: "Automation", icon: Zap, href: "/admin/automation" },
+  { label: "Settings", icon: Settings, href: "/admin/settings" },
 ];
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
@@ -54,8 +54,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {navItems.map((item) => {
           const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            item.href === "/admin"
+              ? pathname === "/admin"
               : pathname.startsWith(item.href);
 
           return (

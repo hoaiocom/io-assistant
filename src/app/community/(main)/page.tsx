@@ -275,7 +275,7 @@ export default function CommunityFeedPage() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm font-semibold">Upcoming events</div>
                 <Link
-                  href="/community/events"
+                  href="/events"
                   className="text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   View all
@@ -307,8 +307,8 @@ export default function CommunityFeedPage() {
                     const mon = day.toLocaleString(undefined, { month: "short" });
                     const href =
                       spaceId != null
-                        ? `/community/spaces/${spaceId}/posts/${e.id}`
-                        : "/community/events";
+                        ? `/spaces/${spaceId}/posts/${e.id}`
+                        : "/events";
 
                     return (
                       <Link
@@ -365,8 +365,8 @@ export default function CommunityFeedPage() {
                     const spaceId = anyP.space?.id;
                     const href =
                       spaceId != null
-                        ? `/community/spaces/${spaceId}/posts/${p.id}`
-                        : "/community";
+                        ? `/spaces/${spaceId}/posts/${p.id}`
+                        : "/";
                     return (
                       <Link
                         key={p.id}

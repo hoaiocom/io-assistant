@@ -142,14 +142,14 @@ function MemberCard({ member }: { member: MemberItem }) {
 
       <div className="mt-3 w-full border-t pt-3">
         {canMessage ? (
-          <Link href="/community/chat" className="w-full">
+          <Link href="/chat" className="w-full">
             <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-8">
               <MessageCircle className="h-3.5 w-3.5" />
               Message
             </Button>
           </Link>
         ) : (
-          <Link href={`/community/members/${memberId}`} className="w-full">
+          <Link href={`/members/${memberId}`} className="w-full">
             <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-8">
               <UserPlus className="h-3.5 w-3.5" />
               View profile
@@ -230,7 +230,7 @@ export default function MembersPage() {
                   {profile.profile_info.location}
                 </p>
               )}
-              <Link href="/community/profile">
+              <Link href="/profile">
                 <Button size="sm" className="mt-3 w-full text-xs">
                   View profile
                 </Button>

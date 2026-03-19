@@ -96,6 +96,16 @@ The member-facing community interface at `/community` requires a **Headless Auth
 
 Once configured, community members can sign in at [http://localhost:3000/community/login](http://localhost:3000/community/login) using their Circle member email. The Headless Auth API generates a JWT access token for each member, which is stored server-side in an encrypted session cookie -- no Circle tokens are ever exposed to the browser.
 
+## Key references (read these first when developing)
+
+- **References index (source of truth)**: `references/INDEX.md`
+- **API mapping (features ↔ swagger)**: `references/API-MAPPING.md`
+- **Roadmap / plan**: `references/ROADMAP.md`
+- **Circle swagger contracts**:
+  - Admin: `references/circle/api-docs/admin-API-swagger.yaml` (`/api/admin/v2/*`)
+  - Headless Auth: `references/circle/api-docs/auth-swagger.yaml` (`/api/v1/headless/*`)
+  - Headless Member: `references/circle/api-docs/headless-client-swagger.yaml` (`/api/headless/v1/*`)
+
 ## Available Scripts
 
 | Command | Description |
