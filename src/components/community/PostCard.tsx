@@ -42,6 +42,7 @@ export interface PostCardData {
   cardview_image?: string | null;
   cover_image_url?: string | null;
   space_id?: number;
+  space?: { id: number; slug?: string; name?: string };
   space_name?: string;
   space_slug?: string;
   comment_count?: number;
@@ -124,10 +125,11 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
   const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
   const coverImage = post.cover_image || post.cardview_image || post.cover_image_url;
   const excerpt = getExcerpt(post);
-  const sid = spaceId || post.space_id;
+  const sid = spaceId || post.space_id || post.space?.id;
   const postHref = sid ? `/community/spaces/${sid}/posts/${post.id}` : "#";
   const timeAgo = safeTimeAgo(post.published_at || post.created_at);
   const initials = getInitials(authorName);
+  const resolvedSpaceName = post.space_name || post.space?.name;
 
   return (
     <article className="rounded-xl border bg-card transition-shadow hover:shadow-sm">
@@ -209,12 +211,12 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
             {authorHeadline && (
               <p className="text-xs text-muted-foreground truncate">{authorHeadline}</p>
             )}
-            {showSpaceName && post.space_name && (
+            {showSpaceName && resolvedSpaceName && sid && (
               <Link
                 href={`/community/spaces/${sid}`}
                 className="text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
-                {post.space_name}
+                {resolvedSpaceName}
               </Link>
             )}
           </div>

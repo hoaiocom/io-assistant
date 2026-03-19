@@ -27,9 +27,16 @@ async function memberRequest<T>(
 }
 
 // Home & Feed
-export function getHomeFeed(token: string, params?: { page?: number; per_page?: number }) {
-  const query = params ? `?page=${params.page || 1}&per_page=${params.per_page || 20}` : "";
-  return memberRequest<unknown>(`home${query}`, token);
+export function getHomeFeed(
+  token: string,
+  params?: { page?: number; per_page?: number; sort?: string },
+) {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set("page", String(params.page));
+  if (params?.per_page) queryParams.set("per_page", String(params.per_page));
+  if (params?.sort) queryParams.set("sort", params.sort);
+  const query = queryParams.toString();
+  return memberRequest<unknown>(`home${query ? `?${query}` : ""}`, token);
 }
 
 // Spaces

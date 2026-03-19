@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const per_page = Number(searchParams.get("per_page")) || 20;
     const sort = searchParams.get("sort") || undefined;
 
-    const data = await getHomeFeed(session.accessToken, { page, per_page });
+    const data = await getHomeFeed(session.accessToken, { page, per_page, sort });
     return NextResponse.json(data);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch feed";
