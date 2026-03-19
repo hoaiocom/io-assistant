@@ -3,8 +3,11 @@
 import { useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
-import { Users, Lock, Globe, Plus } from "lucide-react";
+import { Users, Lock, Globe, Plus, Pin } from "lucide-react";
 import { PostCard, type PostCardData } from "@/components/community/PostCard";
+import { ChatSpaceView } from "@/components/community/ChatSpaceView";
+import { CourseSpaceView, CourseLockedView } from "@/components/community/CourseSpaceView";
+import { EventSpaceView } from "@/components/community/EventSpaceView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +31,29 @@ import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+function SpaceCoverImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  const [proxyFailed, setProxyFailed] = useState(false);
+
+  if (failed && proxyFailed) return null;
+
+  const proxiedSrc = `/api/community/image-proxy?url=${encodeURIComponent(src)}`;
+  const effectiveSrc = failed ? proxiedSrc : src;
+
+  return (
+    <img
+      src={effectiveSrc}
+      alt=""
+      referrerPolicy="no-referrer"
+      className="h-full w-full object-cover"
+      onError={() => {
+        if (!failed) setFailed(true);
+        else setProxyFailed(true);
+      }}
+    />
+  );
+}
+
 export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [page, setPage] = useState(1);
@@ -37,20 +63,27 @@ export default function SpaceDetailPage() {
   const [postBody, setPostBody] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const { data: space, isLoading: spaceLoading } = useSWR(
+  const { data: space, isLoading: spaceLoading, mutate: mutateSpace } = useSWR(
     `/api/community/spaces/${id}`,
     fetcher,
     { revalidateOnFocus: false },
   );
 
+  const isChatSpace = space?.space_type === "chat";
+  const isCourseSpace = space?.space_type === "course";
+  const isEventSpace = space?.space_type === "event";
+
   const { data: postsData, isLoading: postsLoading, mutate } = useSWR(
-    `/api/community/spaces/${id}/posts?page=${page}&per_page=20&sort=${sort}`,
+    !isChatSpace && !isCourseSpace && !isEventSpace ? `/api/community/spaces/${id}/posts?page=${page}&per_page=20&sort=${sort}` : null,
     fetcher,
     { revalidateOnFocus: false },
   );
 
   const posts: PostCardData[] = postsData?.records || [];
   const hasNextPage = postsData?.has_next_page || false;
+
+  const pinnedPosts = posts.filter((p) => p.is_pinned_at_top_of_space);
+  const regularPosts = posts.filter((p) => !p.is_pinned_at_top_of_space);
 
   const handleLike = useCallback(
     async (postId: number, liked: boolean) => {
@@ -101,16 +134,34 @@ export default function SpaceDetailPage() {
   async function handleJoin() {
     try {
       await fetch(`/api/community/spaces/${id}`, { method: "POST" });
+      mutateSpace();
       toast.success("Joined space");
     } catch {
       toast.error("Failed to join space");
     }
   }
 
+  if (!spaceLoading && isChatSpace) {
+    return <ChatSpaceView space={space} spaceId={id} />;
+  }
+
+  if (!spaceLoading && isCourseSpace && space) {
+    if (space.is_member === false) {
+      return <CourseLockedView space={space} onJoin={handleJoin} />;
+    }
+    return <CourseSpaceView space={space} spaceId={id} />;
+  }
+
+  if (!spaceLoading && isEventSpace && space) {
+    return <EventSpaceView space={space} spaceId={id} />;
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+      {/* Space header */}
       {spaceLoading ? (
         <div className="mb-6">
+          <Skeleton className="aspect-[3/1] w-full rounded-xl mb-4" />
           <Skeleton className="h-7 w-48 mb-2" />
           <Skeleton className="h-4 w-32" />
         </div>
@@ -118,23 +169,15 @@ export default function SpaceDetailPage() {
         <div className="mb-6">
           {space.cover_image_url && (
             <div className="relative -mx-4 -mt-6 mb-5 aspect-[3/1] overflow-hidden sm:-mx-6 sm:rounded-xl">
-              <img
-                src={space.cover_image_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
+              <SpaceCoverImage src={space.cover_image_url} />
             </div>
           )}
 
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                {space.emoji && (
-                  <span className="text-xl">{space.emoji}</span>
-                )}
-                <h1 className="text-xl font-semibold tracking-tight">
-                  {space.name}
-                </h1>
+                {space.emoji && <span className="text-xl">{space.emoji}</span>}
+                <h1 className="text-xl font-semibold tracking-tight">{space.name}</h1>
               </div>
               <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                 {space.is_private ? (
@@ -162,6 +205,7 @@ export default function SpaceDetailPage() {
         </div>
       ) : null}
 
+      {/* Toolbar: sort + new post */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1); }}>
           <SelectTrigger className="h-8 w-32 text-xs">
@@ -174,7 +218,7 @@ export default function SpaceDetailPage() {
           </SelectContent>
         </Select>
 
-        {space?.policies?.can_create_post !== false && (
+        {space?.policies?.can_create_post !== false && space?.is_post_disabled !== true && (
           <Dialog open={newPostOpen} onOpenChange={setNewPostOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1.5">
@@ -182,7 +226,7 @@ export default function SpaceDetailPage() {
                 New post
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Create a new post</DialogTitle>
               </DialogHeader>
@@ -204,7 +248,7 @@ export default function SpaceDetailPage() {
                     value={postBody}
                     onChange={(e) => setPostBody(e.target.value)}
                     placeholder="Write your post..."
-                    className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     required
                   />
                 </div>
@@ -222,6 +266,7 @@ export default function SpaceDetailPage() {
         )}
       </div>
 
+      {/* Posts list */}
       {postsLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -235,6 +280,7 @@ export default function SpaceDetailPage() {
               </div>
               <Skeleton className="mt-4 h-5 w-3/4" />
               <Skeleton className="mt-2 h-4 w-full" />
+              <Skeleton className="mt-1.5 h-4 w-2/3" />
             </div>
           ))}
         </div>
@@ -246,18 +292,42 @@ export default function SpaceDetailPage() {
         </div>
       ) : (
         <>
+          {/* Pinned posts */}
+          {pinnedPosts.length > 0 && (
+            <div className="mb-4 space-y-4">
+              {pinnedPosts.map((post) => (
+                <div key={post.id} className="relative">
+                  <div className="absolute -top-2 left-4 z-10 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <Pin className="h-3 w-3" />
+                    Pinned
+                  </div>
+                  <PostCard
+                    post={post}
+                    spaceId={Number(id)}
+                    showSpaceName={false}
+                    onLike={handleLike}
+                    onBookmark={handleBookmark}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Regular posts */}
           <div className="space-y-4">
-            {posts.map((post) => (
+            {regularPosts.map((post) => (
               <PostCard
                 key={post.id}
                 post={post}
                 spaceId={Number(id)}
+                showSpaceName={false}
                 onLike={handleLike}
                 onBookmark={handleBookmark}
               />
             ))}
           </div>
 
+          {/* Pagination */}
           <div className="mt-6 flex items-center justify-center gap-3">
             {page > 1 && (
               <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)}>

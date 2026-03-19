@@ -27,20 +27,6 @@ import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-interface EventTopic {
-  id: number;
-  name: string;
-  slug: string;
-}
-
-interface EventSpace {
-  id: number;
-  name: string;
-  slug: string;
-  space_type: string;
-  topics_count?: number;
-}
-
 interface EventAuthor {
   id?: number;
   community_member_id?: number;
@@ -74,7 +60,6 @@ interface EventPost {
   cardview_image?: string | null;
   created_at: string;
   space_id?: number;
-  space?: { id: number; slug: string; name: string };
   event_setting_attributes?: EventSettings;
   event_settings_attributes?: EventSettings;
   event_type?: string;
@@ -86,19 +71,12 @@ interface EventPost {
     records?: Array<{ id: number; name: string; avatar_url?: string | null }>;
     count?: number;
   };
-  topics?: EventTopic[];
+  topics?: { id: number; name: string; slug: string }[];
 }
 
 function getEventSettings(event: EventPost): EventSettings | undefined {
   return event.event_setting_attributes || event.event_settings_attributes;
 }
-
-interface FilterItem {
-  id: string;
-  name: string;
-}
-
-const VISIBLE_FILTER_COUNT = 3;
 
 function getLocationLabel(locationType?: string) {
   if (!locationType) return null;
@@ -126,8 +104,7 @@ function formatDateRange(startsAt: Date, endsAt?: Date) {
 }
 
 function getTimeUntilLabel(startsAt: Date) {
-  const now = new Date();
-  const diff = startsAt.getTime() - now.getTime();
+  const diff = startsAt.getTime() - Date.now();
   if (diff < 0) return null;
   return `Starts ${formatDistanceToNow(startsAt, { addSuffix: true })}`;
 }
@@ -169,13 +146,14 @@ function RsvpButton({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-36">
-          <DropdownMenuItem disabled className="gap-2 text-green-700 dark:text-green-400">
+          <DropdownMenuItem
+            disabled
+            className="gap-2 text-green-700 dark:text-green-400"
+          >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Going
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2">
-            Not going
-          </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2">Not going</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -218,16 +196,12 @@ function FeaturedEventCard({
   const author = event.author || event.community_member;
   const locationType = settings?.location_type;
   const locationLabel =
-    getLocationLabel(locationType) ||
-    settings?.in_person_location ||
-    null;
+    getLocationLabel(locationType) || settings?.in_person_location || null;
   const LocationIcon = getLocationIcon(locationType);
-
   const description =
     event.body_plain_text_without_attachments ||
     event.body_plain_text ||
     (typeof event.body === "string" ? event.body : null);
-
   const timeLabel = startsAt ? getTimeUntilLabel(startsAt) : null;
 
   return (
@@ -316,9 +290,7 @@ function CompactEventCard({
     event.cover_image || event.cover_image_url || event.cardview_image;
   const locationType = settings?.location_type;
   const locationLabel =
-    getLocationLabel(locationType) ||
-    settings?.in_person_location ||
-    null;
+    getLocationLabel(locationType) || settings?.in_person_location || null;
   const LocationIcon = getLocationIcon(locationType);
 
   return (
@@ -365,94 +337,47 @@ function CompactEventCard({
   );
 }
 
-export default function EventsPage() {
+interface EventSpaceViewProps {
+  space: {
+    id: number;
+    name: string;
+    slug: string;
+    space_type: string;
+    emoji?: string | null;
+    cover_image_url?: string | null;
+    cover_image?: string | null;
+    is_private?: boolean;
+    policies?: { can_create_post?: boolean };
+    is_post_disabled?: boolean;
+  };
+  spaceId: string;
+}
+
+export function EventSpaceView({ space, spaceId }: EventSpaceViewProps) {
   const [timeFilter, setTimeFilter] = useState<"upcoming" | "past">(
     "upcoming",
   );
-  const [selectedFilter, setSelectedFilter] = useState<string>("all");
 
-  const { data: spacesData } = useSWR("/api/community/spaces", fetcher, {
-    revalidateOnFocus: false,
-  });
-
-  const eventSpaces: EventSpace[] = useMemo(() => {
-    const all = Array.isArray(spacesData)
-      ? spacesData
-      : spacesData?.records || [];
-    return all.filter(
-      (s: { space_type: string }) => s.space_type === "event",
-    );
-  }, [spacesData]);
-
-  const hasMultipleSpaces = eventSpaces.length > 1;
-  const firstSpaceId = eventSpaces[0]?.id;
-
-  // Fetch all events (upcoming + past) from the primary event space
   const {
     data: postsData,
-    isLoading: postsLoading,
+    isLoading,
     mutate,
   } = useSWR(
-    firstSpaceId
-      ? `/api/community/spaces/${firstSpaceId}/posts?per_page=50&past_events=true`
-      : null,
+    `/api/community/spaces/${spaceId}/posts?per_page=50&past_events=true`,
     fetcher,
     { revalidateOnFocus: false },
   );
-
-  const isLoading = !spacesData || (!!firstSpaceId && postsLoading);
 
   const allEvents: EventPost[] = useMemo(
     () => postsData?.records || [],
     [postsData],
   );
 
-  // Build type filter items: use space names when multiple spaces, topics otherwise
-  const filterItems: FilterItem[] = useMemo(() => {
-    if (hasMultipleSpaces) {
-      return eventSpaces.map((s) => ({
-        id: `space:${s.id}`,
-        name: s.name,
-      }));
-    }
-    const map = new Map<number, EventTopic>();
-    for (const e of allEvents) {
-      for (const t of e.topics || []) {
-        if (!map.has(t.id)) map.set(t.id, t);
-      }
-    }
-    return Array.from(map.values()).map((t) => ({
-      id: `topic:${t.id}`,
-      name: t.name,
-    }));
-  }, [allEvents, eventSpaces, hasMultipleSpaces]);
-
-  const visibleFilters = filterItems.slice(0, VISIBLE_FILTER_COUNT);
-  const overflowFilters = filterItems.slice(VISIBLE_FILTER_COUNT);
-
-  // Apply type filter (space-based or topic-based)
-  const filteredEvents = useMemo(() => {
-    if (selectedFilter === "all") return allEvents;
-    if (selectedFilter.startsWith("space:")) {
-      const spaceId = Number(selectedFilter.split(":")[1]);
-      return allEvents.filter(
-        (e) => e.space_id === spaceId || e.space?.id === spaceId,
-      );
-    }
-    if (selectedFilter.startsWith("topic:")) {
-      const topicId = Number(selectedFilter.split(":")[1]);
-      return allEvents.filter((e) =>
-        e.topics?.some((t) => t.id === topicId),
-      );
-    }
-    return allEvents;
-  }, [allEvents, selectedFilter]);
-
   const now = useMemo(() => new Date(), []);
 
   const upcomingEvents = useMemo(
     () =>
-      filteredEvents
+      allEvents
         .filter((e) => {
           const startsAt = getEventSettings(e)?.starts_at;
           if (!startsAt) return true;
@@ -463,12 +388,12 @@ export default function EventsPage() {
           const bD = getEventSettings(b)?.starts_at || "";
           return new Date(aD).getTime() - new Date(bD).getTime();
         }),
-    [filteredEvents, now],
+    [allEvents, now],
   );
 
   const pastEvents = useMemo(
     () =>
-      filteredEvents
+      allEvents
         .filter((e) => {
           const startsAt = getEventSettings(e)?.starts_at;
           return startsAt && new Date(startsAt) <= now;
@@ -478,10 +403,9 @@ export default function EventsPage() {
           const bD = getEventSettings(b)?.starts_at || b.created_at;
           return new Date(bD).getTime() - new Date(aD).getTime();
         }),
-    [filteredEvents, now],
+    [allEvents, now],
   );
 
-  // Auto-switch to Past tab if no upcoming events exist
   useEffect(() => {
     if (!isLoading && upcomingEvents.length === 0 && pastEvents.length > 0) {
       setTimeFilter("past");
@@ -491,8 +415,6 @@ export default function EventsPage() {
   const displayEvents =
     timeFilter === "upcoming" ? upcomingEvents : pastEvents;
 
-  // Upcoming: featured "next event" + remaining grouped by month
-  // Past: all events grouped by month (newest first)
   const nextEvent =
     timeFilter === "upcoming" && upcomingEvents.length > 0
       ? upcomingEvents[0]
@@ -516,72 +438,30 @@ export default function EventsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      {/* Filter bar */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted">
-              {timeFilter === "upcoming" ? "Upcoming" : "Past"}
-              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-36">
-            <DropdownMenuItem onClick={() => setTimeFilter("upcoming")}>
-              Upcoming
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTimeFilter("past")}>
-              Past
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
+      {/* Upcoming / Past toggle */}
+      <div className="mb-6 flex items-center gap-1 rounded-full border p-0.5 w-fit">
         <button
           className={cn(
-            "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-            selectedFilter === "all"
-              ? "border-foreground bg-foreground text-background"
-              : "hover:bg-muted",
+            "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+            timeFilter === "upcoming"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
           )}
-          onClick={() => setSelectedFilter("all")}
+          onClick={() => setTimeFilter("upcoming")}
         >
-          All
+          Upcoming
         </button>
-
-        {visibleFilters.map((item) => (
-          <button
-            key={item.id}
-            className={cn(
-              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-              selectedFilter === item.id
-                ? "border-foreground bg-foreground text-background"
-                : "hover:bg-muted",
-            )}
-            onClick={() => setSelectedFilter(item.id)}
-          >
-            {item.name}
-          </button>
-        ))}
-
-        {overflowFilters.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted">
-                More
-                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {overflowFilters.map((item) => (
-                <DropdownMenuItem
-                  key={item.id}
-                  onClick={() => setSelectedFilter(item.id)}
-                >
-                  {item.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <button
+          className={cn(
+            "rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+            timeFilter === "past"
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => setTimeFilter("past")}
+        >
+          Past
+        </button>
       </div>
 
       {/* Content */}
@@ -602,7 +482,6 @@ export default function EventsPage() {
         </div>
       ) : (
         <>
-          {/* Upcoming: featured "Next event" card */}
           {nextEvent && (
             <section className="mb-8">
               <h2 className="mb-3 text-base font-semibold">Next event</h2>
@@ -610,7 +489,6 @@ export default function EventsPage() {
             </section>
           )}
 
-          {/* Month-grouped events */}
           {monthGroups.map((group) => (
             <section key={group.label} className="mb-8">
               <h2 className="mb-3 text-base font-semibold">{group.label}</h2>

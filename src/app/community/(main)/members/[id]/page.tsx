@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
 import {
@@ -11,16 +12,44 @@ import {
   FileText,
   MessageSquare,
   FolderOpen,
+  Loader2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function MemberProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [startingDm, setStartingDm] = useState(false);
+
+  async function handleSendMessage() {
+    setStartingDm(true);
+    try {
+      const res = await fetch("/api/community/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_room: { kind: "direct", community_member_ids: [Number(id)] },
+        }),
+      });
+      const room = await res.json();
+      if (room?.uuid) {
+        router.push(`/community/chat/${room.uuid}`);
+      } else {
+        toast.error("Could not start conversation");
+      }
+    } catch {
+      toast.error("Failed to start conversation");
+    } finally {
+      setStartingDm(false);
+    }
+  }
+
   const { data: profile, isLoading } = useSWR(
     `/api/community/members/${id}`,
     fetcher,
@@ -191,8 +220,18 @@ export default function MemberProfilePage() {
 
           {profile.can_receive_dm_from_current_member && profile.messaging_enabled && (
             <div className="mt-4">
-              <Button size="sm" variant="outline" className="gap-1.5">
-                <MessageCircle className="h-4 w-4" />
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={startingDm}
+                onClick={handleSendMessage}
+              >
+                {startingDm ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MessageCircle className="h-4 w-4" />
+                )}
                 Send message
               </Button>
             </div>

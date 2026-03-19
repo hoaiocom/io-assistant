@@ -284,6 +284,87 @@ export interface CourseLesson {
   published: boolean;
 }
 
+// Headless API course types (member-facing)
+
+export interface HeadlessLessonProgress {
+  status: "incomplete" | "completed";
+  needs_to_complete_previous_lesson?: boolean;
+}
+
+export interface HeadlessCourseLessonSummary {
+  id: number;
+  name: string;
+  is_featured_media_enabled: boolean;
+  featured_media_duration: number | null;
+  dripped_at: string | null;
+  progress: HeadlessLessonProgress;
+}
+
+export interface HeadlessCourseSection {
+  id: number;
+  name: string;
+  drip_delay: number;
+  notify_students_enabled: boolean;
+  is_dripped: boolean;
+  dripped_at: string | null;
+  lessons: HeadlessCourseLessonSummary[];
+}
+
+export interface HeadlessCourseLesson {
+  id: number;
+  name: string;
+  enforce_featured_media_completion: boolean;
+  autocomplete_on_featured_media_completion: boolean;
+  is_comments_enabled: boolean;
+  is_featured_media_enabled: boolean;
+  featured_media: {
+    filename: string;
+    content_type: string;
+    metadata: {
+      identified?: boolean;
+      width?: number;
+      height?: number;
+      duration?: number;
+      analyzed?: boolean;
+    };
+    byte_size: number;
+    type: string;
+    url: string;
+    webvtt_file_url: string | null;
+    chapters_url: string | null;
+    preview_thumbnails_url: string | null;
+    image_variants: {
+      thumbnail: string | null;
+    };
+    signed_id: string;
+  } | null;
+  is_featured_media_download_enabled: boolean;
+  space: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  bookmark_id: number | null;
+  chat_room_uuid: string | null;
+  rich_text_body: {
+    body: Record<string, unknown>;
+    attachments?: unknown[];
+    inline_attachments?: unknown[];
+    sgids_to_object_map?: Record<string, unknown>;
+    format?: string;
+    community_members?: unknown[];
+    entities?: unknown[];
+    group_mentions?: unknown[];
+    polls?: unknown[];
+  } | null;
+  featured_media_duration: number | null;
+  section_id: number;
+  dripped_at: string | null;
+  progress: HeadlessLessonProgress;
+  lesson_label?: string;
+  section_label?: string;
+}
+
 export interface SpaceMember {
   id: number;
   community_member_id: number;

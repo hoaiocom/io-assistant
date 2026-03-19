@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMemberAuth } from "@/lib/member-auth";
-import { getSpacePosts, createMemberPost } from "@/lib/circle/headless-member";
+import {
+  getSpaceChatMessages,
+  sendSpaceChatMessage,
+} from "@/lib/circle/headless-member";
 
 export async function GET(
   req: NextRequest,
@@ -10,22 +13,25 @@ export async function GET(
     const session = await requireMemberAuth();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
-    const page = Number(searchParams.get("page")) || 1;
-    const per_page = Number(searchParams.get("per_page")) || 20;
-    const sort = searchParams.get("sort") || undefined;
-    const past_events = searchParams.get("past_events") || undefined;
-    const topics = searchParams.get("topics") || undefined;
+    const refId = searchParams.get("id")
+      ? Number(searchParams.get("id"))
+      : undefined;
+    const previous_per_page = searchParams.get("previous_per_page")
+      ? Number(searchParams.get("previous_per_page"))
+      : undefined;
+    const next_per_page = searchParams.get("next_per_page")
+      ? Number(searchParams.get("next_per_page"))
+      : undefined;
 
-    const data = await getSpacePosts(session.accessToken, Number(id), {
-      page,
-      per_page,
-      sort,
-      past_events,
-      topics,
+    const data = await getSpaceChatMessages(session.accessToken, Number(id), {
+      id: refId,
+      previous_per_page,
+      next_per_page,
     });
     return NextResponse.json(data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch posts";
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch messages";
     if (message === "Unauthorized" || message === "Session expired") {
       return NextResponse.json({ error: message }, { status: 401 });
     }
@@ -41,10 +47,15 @@ export async function POST(
     const session = await requireMemberAuth();
     const { id } = await params;
     const body = await req.json();
-    const data = await createMemberPost(session.accessToken, Number(id), body);
+    const data = await sendSpaceChatMessage(
+      session.accessToken,
+      Number(id),
+      body,
+    );
     return NextResponse.json(data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create post";
+    const message =
+      error instanceof Error ? error.message : "Failed to send message";
     if (message === "Unauthorized" || message === "Session expired") {
       return NextResponse.json({ error: message }, { status: 401 });
     }
