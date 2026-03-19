@@ -1,8 +1,10 @@
 # IO Assistant
 
-Admin management platform for the **IO Scholar** community on [Circle.so](https://circle.so). Provides a power-user interface that goes beyond Circle's native dashboard with bulk operations, content moderation, analytics, automation, and full API coverage.
+Admin management platform and member community portal for the **IO Scholar** community on [Circle.so](https://circle.so). Includes a power-user admin dashboard with bulk operations, content moderation, analytics, and automation -- plus a complete member-facing community UI built on Circle's Headless API.
 
 ## Features
+
+### Admin Dashboard (`/dashboard`)
 
 - **Member Management** -- Search, filter, invite, edit, deactivate, ban, and bulk-tag members. View activity scores, spaces, and access groups per member.
 - **Space & Content** -- CRUD for spaces, posts, comments, topics, and events. Includes AI-powered post summaries and space group management.
@@ -10,7 +12,20 @@ Admin management platform for the **IO Scholar** community on [Circle.so](https:
 - **Analytics** -- Community health dashboard with member stats, space distribution, content metrics, top contributors, and gamification leaderboard.
 - **Automation** -- Webhook receiver for Circle events, invitation link management, direct messaging, and a JSON-based onboarding rules engine.
 - **Settings** -- Manage access groups, profile fields, forms (with submissions), and course sections/lessons from a single interface.
-- **Headless API Client** -- Full Auth and Member API client libraries ready for building a custom community frontend.
+
+### Member Community (`/community`)
+
+- **Home Feed** -- Personalized post feed from joined spaces with like, comment, and bookmark actions.
+- **Spaces** -- Browse all community spaces grouped by category, view posts within each space, create new posts.
+- **Post Detail** -- Full post view with rich content, comments thread, like/bookmark.
+- **Events** -- Upcoming and past events with RSVP support.
+- **Members** -- Search-based member directory with public profiles, gamification stats, and messaging.
+- **Notifications** -- Real-time notification feed with unread indicators and mark-all-read.
+- **Chat** -- Direct message conversations with real-time message polling.
+- **Courses** -- Course catalog with enrollment status.
+- **Leaderboard** -- Gamification rankings.
+- **Search** -- Global search across posts, comments, and members.
+- **Bookmarks** -- Saved posts for later.
 
 ## Tech Stack
 
@@ -53,7 +68,7 @@ Open `.env.local` and fill in the values:
 | `CIRCLE_COMMUNITY_HOST` | Your community hostname, e.g. `io-scholar.circle.so` | Yes |
 | `SESSION_PASSWORD` | Random string, at least 32 characters (used to encrypt session cookies) | Yes |
 | `ADMIN_PASSWORD_HASH` | bcrypt hash of your admin password (see step 3) | Yes |
-| `CIRCLE_HEADLESS_AUTH_TOKEN` | Headless auth token (only needed for member-facing features) | No |
+| `CIRCLE_HEADLESS_AUTH_TOKEN` | Headless Auth token (required for member community UI) | For `/community` |
 
 ### 3. Generate your admin password
 
@@ -71,6 +86,16 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) and log in with the password you chose in step 3.
 
+### 5. (Optional) Enable the member community UI
+
+The member-facing community interface at `/community` requires a **Headless Auth** token from Circle.
+
+1. Go to your Circle dashboard: **Settings > Developers > Tokens**
+2. Create a new token with type **Headless Auth**
+3. Set `CIRCLE_HEADLESS_AUTH_TOKEN` in `.env.local` to this token value
+
+Once configured, community members can sign in at [http://localhost:3000/community/login](http://localhost:3000/community/login) using their Circle member email. The Headless Auth API generates a JWT access token for each member, which is stored server-side in an encrypted session cookie -- no Circle tokens are ever exposed to the browser.
+
 ## Available Scripts
 
 | Command | Description |
@@ -86,24 +111,52 @@ Open [http://localhost:3000](http://localhost:3000) and log in with the password
 ```
 src/
 ├── app/
-│   ├── api/                  # 45 API routes proxying Circle APIs
-│   │   ├── auth/             # Login, logout, session check
-│   │   ├── members/          # CRUD, search, bulk ops, tags
-│   │   ├── spaces/           # CRUD, member management
-│   │   ├── posts/            # CRUD, AI summaries
-│   │   ├── comments/         # List, create, delete
-│   │   ├── topics/           # CRUD
-│   │   ├── events/           # CRUD, attendees
-│   │   ├── moderation/       # Flagged content, search, segments
-│   │   ├── analytics/        # Stats, leaderboard, top contributors
-│   │   ├── access-groups/    # CRUD, member assignment
-│   │   ├── invitations/      # Create, list, revoke links
-│   │   ├── forms/            # CRUD, submissions
-│   │   ├── profile-fields/   # CRUD
-│   │   ├── courses/          # Sections and lessons
-│   │   ├── messages/         # Send DMs
-│   │   ├── community/        # Community info
+│   ├── api/                  # ~63 API routes
+│   │   ├── auth/             # Admin login, logout, session check
+│   │   ├── community/        # Member API proxy routes (18 routes)
+│   │   │   ├── auth/         #   Member login/logout/session
+│   │   │   ├── feed/         #   Home feed
+│   │   │   ├── spaces/       #   Spaces, posts, join/leave
+│   │   │   ├── posts/        #   Comments, likes
+│   │   │   ├── notifications/#   List, mark read
+│   │   │   ├── bookmarks/    #   CRUD
+│   │   │   ├── chat/         #   Rooms, messages
+│   │   │   ├── events/       #   RSVP, attendees
+│   │   │   ├── search/       #   Global search
+│   │   │   ├── profile/      #   Current member profile
+│   │   │   ├── members/      #   Public profiles
+│   │   │   └── courses/      #   Course sections
+│   │   ├── members/          # Admin: CRUD, search, bulk ops, tags
+│   │   ├── spaces/           # Admin: CRUD, member management
+│   │   ├── posts/            # Admin: CRUD, AI summaries
+│   │   ├── comments/         # Admin: list, create, delete
+│   │   ├── topics/           # Admin: CRUD
+│   │   ├── events/           # Admin: CRUD, attendees
+│   │   ├── moderation/       # Admin: flagged content, search, segments
+│   │   ├── analytics/        # Admin: stats, leaderboard
+│   │   ├── access-groups/    # Admin: CRUD, member assignment
+│   │   ├── invitations/      # Admin: create, list, revoke links
+│   │   ├── forms/            # Admin: CRUD, submissions
+│   │   ├── profile-fields/   # Admin: CRUD
+│   │   ├── courses/          # Admin: sections and lessons
+│   │   ├── messages/         # Admin: send DMs
 │   │   └── webhooks/circle/  # Incoming Circle webhook events
+│   ├── community/            # 14 member-facing pages
+│   │   ├── login/            # Member email login
+│   │   ├── page.tsx          # Home feed
+│   │   ├── spaces/[id]/      # Space detail + post list
+│   │   ├── spaces/[id]/posts/[postId]/ # Post detail + comments
+│   │   ├── events/           # Events with RSVP
+│   │   ├── members/          # Member search directory
+│   │   ├── members/[id]/     # Public member profile
+│   │   ├── notifications/    # Notification feed
+│   │   ├── chat/             # Chat room list
+│   │   ├── chat/[uuid]/      # Chat conversation
+│   │   ├── courses/          # Course catalog
+│   │   ├── leaderboard/      # Gamification rankings
+│   │   ├── search/           # Global search
+│   │   ├── bookmarks/        # Saved posts
+│   │   └── profile/          # My profile
 │   ├── dashboard/            # 9 admin pages
 │   │   ├── page.tsx          # Overview with stats cards
 │   │   ├── members/          # Member table with bulk actions
@@ -117,12 +170,18 @@ src/
 │   ├── login/                # Admin login page
 │   └── layout.tsx            # Root layout with Toaster
 ├── components/
-│   ├── layout/               # Sidebar, Topbar, DashboardShell
+│   ├── community/            # Member UI components
+│   │   ├── CommunityShell.tsx  # Layout shell (header + sidebar + content)
+│   │   ├── CommunityHeader.tsx # Top nav, search, notifications, profile
+│   │   ├── CommunitySidebar.tsx# Space navigation grouped by category
+│   │   └── PostCard.tsx        # Reusable post card with actions
+│   ├── layout/               # Admin layout: Sidebar, Topbar, DashboardShell
 │   └── ui/                   # 18 shadcn/ui primitives
 ├── data/
 │   └── rules.json            # Onboarding automation rules
 └── lib/
-    ├── auth.ts               # iron-session helpers
+    ├── auth.ts               # Admin iron-session helpers
+    ├── member-auth.ts        # Member session (headless JWT, auto-refresh)
     ├── utils.ts              # Tailwind cn() merge utility
     └── circle/               # Circle API client layer
         ├── client.ts          # Admin API v2 HTTP client (rate limit, retry, pagination)
@@ -141,26 +200,34 @@ src/
 
 ## Architecture
 
-All Circle API calls are made server-side through Next.js API routes. Tokens are never exposed to the browser.
+All Circle API calls are made server-side through Next.js API routes. Tokens are never exposed to the browser. The admin dashboard and member community use separate authentication sessions.
 
 ```
-Browser (Admin)
-  │  SWR data fetching
-  ▼
-Next.js API Routes (/api/*)
-  │  iron-session auth guard
-  ▼
-Circle API Client Layer (src/lib/circle/)
-  │  Rate limiting (1800 req/5min buffer)
-  │  Automatic retry with backoff on 429
-  │  Generic pagination helper
-  ▼
+Browser (Admin)                        Browser (Member)
+  │  SWR data fetching                   │  SWR data fetching
+  ▼                                      ▼
+/api/* routes                          /api/community/* routes
+  │  iron-session (admin)                │  iron-session (member JWT)
+  │  password-based auth                 │  email-based headless auth
+  ▼                                      │  auto token refresh
+Circle Admin API v2 client               ▼
+  │  Rate limiting, retry              Headless Member API client
+  │  In-memory cache                     │  Per-member JWT tokens
+  ▼                                      ▼
 Circle.so Platform APIs
-  ├── Admin API v2
-  ├── Headless Auth API
-  ├── Headless Member API
-  └── WebSocket (future)
+  ├── Admin API v2         (admin dashboard)
+  ├── Headless Auth API    (member login/token management)
+  ├── Headless Member API  (member community features)
+  └── WebSocket            (future)
 ```
+
+### Member authentication flow
+
+1. Member visits `/community/login` and enters their Circle member email
+2. Server calls Circle Headless Auth API to generate a JWT access token + refresh token
+3. Tokens are stored in an encrypted `iron-session` cookie (`io-community-member-session`)
+4. On each API request, middleware checks the access token expiry and auto-refreshes via the Headless Auth API if needed
+5. On logout, the access token is revoked server-side
 
 ## Circle API Rate Limits
 
@@ -179,6 +246,26 @@ https://your-domain.com/api/webhooks/circle
 ```
 
 The endpoint accepts POST requests and logs incoming events. Extend the handler in `src/app/api/webhooks/circle/route.ts` to trigger automation rules.
+
+## Member Community Pages
+
+| Route | Description |
+|-------|-------------|
+| `/community/login` | Member sign-in with Circle email |
+| `/community` | Home feed -- posts from joined spaces |
+| `/community/spaces/[id]` | Space detail -- post list, sorting, new post |
+| `/community/spaces/[id]/posts/[postId]` | Post detail -- comments, like, bookmark |
+| `/community/events` | Upcoming and past events with RSVP |
+| `/community/members` | Member search directory |
+| `/community/members/[id]` | Public profile with stats and gamification |
+| `/community/notifications` | Notification feed with read/unread state |
+| `/community/chat` | Chat room list with unread counts |
+| `/community/chat/[uuid]` | Real-time chat conversation |
+| `/community/courses` | Course catalog |
+| `/community/leaderboard` | Gamification leaderboard |
+| `/community/search` | Global search |
+| `/community/bookmarks` | Saved posts |
+| `/community/profile` | Current member's profile |
 
 ## Roadmap
 
