@@ -1,0 +1,67 @@
+{
+  "onboarding_rules": [
+    {
+      "id": "welcome-new-member",
+      "name": "Welcome New Member",
+      "description": "Auto-assign default tags and spaces when a new member joins",
+      "enabled": true,
+      "trigger": "member_joined",
+      "conditions": [],
+      "actions": [
+        {
+          "type": "add_tag",
+          "tag_name": "new-member"
+        },
+        {
+          "type": "send_welcome_message",
+          "message": "Welcome to IO Scholar! We're glad to have you here."
+        }
+      ]
+    },
+    {
+      "id": "auto-tag-by-profile",
+      "name": "Auto-Tag by Profile Field",
+      "description": "Assign tags based on profile field values",
+      "enabled": false,
+      "trigger": "profile_updated",
+      "conditions": [
+        {
+          "field": "role",
+          "operator": "equals",
+          "value": "researcher"
+        }
+      ],
+      "actions": [
+        {
+          "type": "add_tag",
+          "tag_name": "researcher"
+        },
+        {
+          "type": "add_to_space",
+          "space_name": "Research Hub"
+        }
+      ]
+    },
+    {
+      "id": "inactive-member-followup",
+      "name": "Inactive Member Follow-up",
+      "description": "Flag members inactive for 30+ days",
+      "enabled": false,
+      "trigger": "scheduled",
+      "schedule": "weekly",
+      "conditions": [
+        {
+          "field": "last_seen_at",
+          "operator": "older_than_days",
+          "value": 30
+        }
+      ],
+      "actions": [
+        {
+          "type": "add_tag",
+          "tag_name": "inactive-30d"
+        }
+      ]
+    }
+  ]
+}
