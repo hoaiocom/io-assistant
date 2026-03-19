@@ -29,7 +29,7 @@ Your UI should treat “Feed / List / Card” as **presentation modes** over the
 
 #### A) Feed layout (default; high-parity with your current UI)
 
-- **Intent**: chronological “conversation stream” with rich PostCards.
+- **Intent**: chronological “conversation stream” with rich PostCards. By default, basic spaces should load the **space’s default view** (from `space.display_view`) and show **all posts** for that space.
 - **UI elements**
   - Sort dropdown (hide when `hide_sorting === true`)
   - Topic navigation bar when `topics_count > 0`:
@@ -78,6 +78,7 @@ Implement a consistent topic navigation bar for basic spaces:
 - **Data**: `GET /spaces/{space_id}/topics`
 - **Filtering**: pass `topics` query param to `GET /spaces/{space_id}/posts`
 - **Rules**
+  - always include an `All` topic chip that shows all posts when selected
   - if `require_topic_selection` is true: block list rendering until a topic is chosen
   - hide admin-only topics from the bar unless the member is admin/mod (if that role data is in payloads)
 
@@ -104,5 +105,6 @@ Implement a consistent topic navigation bar for basic spaces:
 - [x] Basic space supports Feed/List/Card layouts (UI parity) without changing the API. (See `src/app/community/(main)/spaces/[id]/page.tsx` — tabs + 3 renderers over the same posts data)
 - [x] Topic navigation is implemented and matches `require_topic_selection`. (See `src/app/api/community/spaces/[id]/topics/route.ts`, and topic chips + gating in `src/app/community/(main)/spaces/[id]/page.tsx`)
 - [x] Sorting respects `hide_sorting` and uses API-supported sort values. (See `src/app/community/(main)/spaces/[id]/page.tsx` — hides sort dropdown when `space.hide_sorting` and uses swagger enum values; “Latest” omits the param)
+- [x] Default load state shows **All posts** in the space with the `All` topic chip selected and uses the space’s `display_view` value as the initial layout (Feed/List/Card).
 - [x] All routes go through `/api/community/*` proxies; no direct Circle calls in browser. (Posts/topics proxies under `src/app/api/community/spaces/[id]/*`)
 

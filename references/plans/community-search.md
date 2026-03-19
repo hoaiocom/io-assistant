@@ -71,7 +71,19 @@
 
 ### Acceptance checklist
 
-- [ ] Advanced search types and filters are usable from UI.
-- [ ] Result cards are type-aware and link to the correct destinations.
-- [ ] Query + filters are URL-addressable and debounced.
+- [x] Advanced search types are usable from UI.  
+  Implemented in: `src/app/api/community/advanced-search/route.ts`, `src/lib/circle/headless-member.ts`, `src/app/community/(main)/search/page.tsx` (type tabs + proxy route + wrapper)
+- [x] Result cards are type-aware and link to the correct destinations (posts/comments/members/spaces/lessons).  
+  Implemented in: `src/app/community/(main)/search/page.tsx` (type-aware routing via `getResultHref`)
+- [x] Query + (type) filter are URL-addressable and debounced.  
+  Implemented in: `src/app/community/(main)/search/page.tsx` (`q` + `type` in URL, debounced input)
+
+#### Pending / follow-ups
+
+- **Advanced filters UI (drawer: space/topic/tags/author/status/date range)**: pending — endpoint supports `filters[...]` deepObject, but the UI does not expose these yet.  
+  Blocker: needs product decisions on which filters to ship first and which spaces/topics/tag pickers to reuse.
+- **Comment deep links**: pending — advanced search returns comment `post_id`, but we don’t have comment-anchor routing in the post page yet.  
+  Blocker: requires post page comment rendering + anchor/scroll behavior.
+- **Mentions experience**: partial — tab exists and results render, but routing is disabled because there’s no reliable internal destination mapping yet.  
+  Blocker: define destinations per `mention_scope` and add corresponding routes.
 

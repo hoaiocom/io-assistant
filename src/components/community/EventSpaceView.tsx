@@ -16,6 +16,7 @@ import {
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -23,10 +24,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+type SpaceTopic = { id: number; name: string; slug?: string; admin_only?: boolean };
 
 interface EventAuthor {
   id?: number;
@@ -78,6 +88,108 @@ interface EventPost {
 
 function getEventSettings(event: EventPost): EventSettings | undefined {
   return event.event_setting_attributes || event.event_settings_attributes;
+}
+
+function AttendeeAvatar({
+  src,
+  name,
+}: {
+  src?: string | null;
+  name: string;
+}) {
+  if (!src) {
+    return (
+      <div
+        className="flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-[10px] font-medium text-muted-foreground"
+        aria-label={name}
+        title={name}
+      >
+        {name.slice(0, 1).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      title={name}
+      referrerPolicy="no-referrer"
+      className="h-7 w-7 rounded-full border object-cover"
+    />
+  );
+}
+
+function AttendeesDialog({
+  eventId,
+  attendeeCount,
+  hideAttendees,
+  preview,
+}: {
+  eventId: number;
+  attendeeCount: number;
+  hideAttendees?: boolean;
+  preview?: Array<{ id: number; name: string; avatar_url?: string | null }>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading, error } = useSWR(
+    open && !hideAttendees ? `/api/community/events/${eventId}/rsvp` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const records: Array<{ id: number; name: string; avatar_url?: string | null }> =
+    data?.records || preview || [];
+
+  if (hideAttendees || attendeeCount <= 0) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted">
+          <Users className="h-3 w-3" />
+          {attendeeCount} Attendee{attendeeCount !== 1 ? "s" : ""}
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Attendees</DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <Skeleton className="h-7 w-7 rounded-full" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+            Failed to load attendees.
+          </div>
+        ) : records.length === 0 ? (
+          <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+            No attendees yet.
+          </div>
+        ) : (
+          <div className="max-h-80 overflow-auto pr-1">
+            <div className="space-y-2">
+              {records.map((m) => (
+                <div key={m.id} className="flex items-center gap-2.5">
+                  <AttendeeAvatar src={m.avatar_url} name={m.name} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{m.name}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function getLocationLabel(locationType?: string) {
@@ -207,6 +319,7 @@ function FeaturedEventCard({
     event.body_plain_text ||
     (typeof event.body === "string" ? event.body : null);
   const timeLabel = startsAt ? getTimeUntilLabel(startsAt) : null;
+  const attendeePreview = event.event_attendees?.records || [];
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
@@ -272,10 +385,25 @@ function FeaturedEventCard({
             </span>
           )}
           {attendeeCount > 0 && !settings?.hide_attendees && (
-            <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" />
-              {attendeeCount} Attendee{attendeeCount !== 1 ? "s" : ""}
-            </span>
+            <div className="flex items-center gap-2">
+              {attendeePreview.length > 0 && (
+                <div className="flex -space-x-2">
+                  {attendeePreview.slice(0, 3).map((m) => (
+                    <AttendeeAvatar
+                      key={m.id}
+                      src={m.avatar_url}
+                      name={m.name}
+                    />
+                  ))}
+                </div>
+              )}
+              <AttendeesDialog
+                eventId={event.id}
+                attendeeCount={attendeeCount}
+                hideAttendees={settings?.hide_attendees}
+                preview={attendeePreview}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -302,6 +430,8 @@ function CompactEventCard({
   const locationLabel =
     getLocationLabel(locationType) || settings?.in_person_location || null;
   const LocationIcon = getLocationIcon(locationType);
+  const attendeeCount = event.event_attendees?.count || settings?.rsvp_count || 0;
+  const attendeePreview = event.event_attendees?.records || [];
 
   return (
     <div className="flex gap-4 rounded-xl border bg-card p-3 transition-shadow hover:shadow-sm sm:p-4">
@@ -347,6 +477,23 @@ function CompactEventCard({
             {locationLabel}
           </div>
         )}
+        {attendeeCount > 0 && !settings?.hide_attendees && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {attendeePreview.length > 0 && (
+              <div className="flex -space-x-2">
+                {attendeePreview.slice(0, 3).map((m) => (
+                  <AttendeeAvatar key={m.id} src={m.avatar_url} name={m.name} />
+                ))}
+              </div>
+            )}
+            <AttendeesDialog
+              eventId={event.id}
+              attendeeCount={attendeeCount}
+              hideAttendees={settings?.hide_attendees}
+              preview={attendeePreview}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -372,15 +519,33 @@ export function EventSpaceView({ space, spaceId }: EventSpaceViewProps) {
   const [timeFilter, setTimeFilter] = useState<"upcoming" | "past">(
     "upcoming",
   );
+  const [selectedTopics, setSelectedTopics] = useState<number[]>([]);
+
+  const topicsEnabled = (space as { topics_count?: number }).topics_count
+    ? (space as { topics_count?: number }).topics_count! > 0
+    : false;
+
+  const { data: topicsData, isLoading: topicsLoading } = useSWR(
+    topicsEnabled ? `/api/community/spaces/${spaceId}/topics?per_page=200` : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+
+  const topics: SpaceTopic[] = topicsData?.records || [];
+
+  const topicsQuery = useMemo(() => {
+    if (!selectedTopics.length) return "";
+    const sp = new URLSearchParams();
+    for (const t of selectedTopics) sp.append("topics", String(t));
+    return `&${sp.toString()}`;
+  }, [selectedTopics]);
 
   const {
     data: postsData,
     isLoading,
     mutate,
   } = useSWR(
-    `/api/community/spaces/${spaceId}/posts?per_page=50&past_events=${
-      timeFilter === "past" ? "true" : "false"
-    }`,
+    `/api/community/spaces/${spaceId}/posts?per_page=50&past_events=${timeFilter === "past" ? "true" : "false"}${topicsQuery}`,
     fetcher,
     { revalidateOnFocus: false },
   );
@@ -455,6 +620,61 @@ export function EventSpaceView({ space, spaceId }: EventSpaceViewProps) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      {/* Topic filters */}
+      {topicsEnabled && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium">Topics</div>
+            {selectedTopics.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs"
+                onClick={() => setSelectedTopics([])}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {topicsLoading ? (
+              <>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-8 w-20 rounded-full" />
+                ))}
+              </>
+            ) : (
+              <>
+                {topics.map((t) => {
+                  const active = selectedTopics.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedTopics((prev) =>
+                          prev.includes(t.id)
+                            ? prev.filter((id) => id !== t.id)
+                            : [...prev, t.id],
+                        )
+                      }
+                      className="shrink-0"
+                    >
+                      <Badge
+                        variant={active ? "default" : "outline"}
+                        className="h-8 rounded-full px-3 text-xs font-medium"
+                      >
+                        {t.name}
+                      </Badge>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Upcoming / Past toggle */}
       <div className="mb-6 flex items-center gap-1 rounded-full border p-0.5 w-fit">
         <button

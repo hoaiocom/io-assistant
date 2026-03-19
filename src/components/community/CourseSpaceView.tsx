@@ -68,6 +68,7 @@ interface SpaceData {
 }
 
 interface ProfileData {
+  id?: number;
   name?: string;
   first_name?: string;
   avatar_url?: string | null;
@@ -77,6 +78,55 @@ interface CourseSpaceViewProps {
   space: SpaceData;
   spaceId: string;
 }
+
+type LessonFilesResponse = {
+  records?: Array<{
+    id: number;
+    filename?: string;
+    content_type?: string;
+    byte_size?: number;
+    url?: string;
+    type?: string;
+    created_at?: string;
+  }>;
+  count?: number;
+  page?: number;
+  per_page?: number;
+  has_next_page?: boolean;
+};
+
+type QuizAttempt = {
+  id: number;
+  quiz_id: number;
+  created_at?: string;
+  grade?: number;
+  result?: string;
+  passing_grade?: number;
+  enforce_passing_grade?: boolean;
+  hide_answers?: boolean;
+  correct_responses?: number;
+  description?: string | null;
+  questions?: Array<{
+    id: number;
+    question_type?: string;
+    statement?: string;
+    correct?: boolean;
+    options?: Array<{
+      id: number;
+      value?: string;
+      selected?: boolean;
+    }>;
+  }>;
+};
+
+type CourseQuizAttemptsResponse = {
+  records?: Array<{
+    id: number;
+    quiz_id: number;
+    created_at?: string;
+    community_member?: { id?: number };
+  }>;
+};
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return "";
@@ -356,6 +406,7 @@ export function CourseSpaceView({ space, spaceId }: CourseSpaceViewProps) {
         isLoading={lessonLoading}
         onBack={() => setSelectedLessonId(null)}
         onToggleProgress={handleToggleProgress}
+        memberId={profile?.id}
       />
     );
   }
@@ -523,6 +574,7 @@ function LessonDetailView({
   isLoading,
   onBack,
   onToggleProgress,
+  memberId,
 }: {
   spaceId: string;
   spaceName: string;
@@ -530,7 +582,120 @@ function LessonDetailView({
   isLoading: boolean;
   onBack: () => void;
   onToggleProgress: (lessonId: number, currentStatus: string) => void;
+  memberId?: number;
 }) {
+  const [quizAttempt, setQuizAttempt] = useState<QuizAttempt | null>(null);
+  const [quizSelections, setQuizSelections] = useState<Record<number, number[]>>(
+    {},
+  );
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
+
+  const lessonId =
+    typeof (lessonData as { id?: unknown } | null)?.id === "number"
+      ? ((lessonData as { id: number }).id as number)
+      : null;
+
+  const {
+    data: filesData,
+    isLoading: filesLoading,
+    error: filesError,
+  } = useSWR<LessonFilesResponse>(
+    lessonId
+      ? `/api/community/courses/${spaceId}/lessons/${lessonId}/files?per_page=50`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const quizId =
+    typeof (lessonData as { quiz_id?: unknown } | null)?.quiz_id === "number"
+      ? ((lessonData as { quiz_id: number }).quiz_id as number)
+      : typeof (lessonData as { quiz?: { id?: unknown } } | null)?.quiz?.id ===
+          "number"
+        ? ((lessonData as { quiz: { id: number } }).quiz.id as number)
+        : null;
+
+  const { data: courseQuizAttempts } = useSWR<CourseQuizAttemptsResponse>(
+    quizId && !quizAttempt && memberId
+      ? `/api/community/courses/${spaceId}/quiz-attempts?per_page=50`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  useEffect(() => {
+    if (!quizId || quizAttempt || !memberId) return;
+    const records = courseQuizAttempts?.records || [];
+    if (!records.length) return;
+    const mine = records.filter(
+      (r) => r.quiz_id === quizId && r.community_member?.id === memberId,
+    );
+    if (!mine.length) return;
+    const latest = mine
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.created_at || "").getTime() -
+          new Date(a.created_at || "").getTime(),
+      )[0];
+    if (!latest) return;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/community/quizzes/${quizId}/attempts/${latest.id}`,
+        );
+        if (!res.ok) return;
+        const json = (await res.json().catch(() => null)) as QuizAttempt | null;
+        if (json && typeof json.id === "number") {
+          setQuizAttempt(json);
+          const initial: Record<number, number[]> = {};
+          for (const q of json.questions || []) {
+            const selectedIds = (q.options || [])
+              .filter((o) => o.selected)
+              .map((o) => o.id);
+            if (selectedIds.length) initial[q.id] = selectedIds;
+          }
+          setQuizSelections(initial);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [courseQuizAttempts, memberId, quizAttempt, quizId]);
+
+  useEffect(() => {
+    if (!quizId) return;
+    const key = `quizAttempt:${quizId}`;
+    const raw = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { attemptId?: unknown } | null;
+    const attemptId = parsed && typeof parsed.attemptId === "number" ? parsed.attemptId : null;
+    if (!attemptId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/community/quizzes/${quizId}/attempts/${attemptId}`,
+        );
+        if (!res.ok) return;
+        const json = (await res.json().catch(() => null)) as QuizAttempt | null;
+        if (json && typeof json.id === "number") {
+          setQuizAttempt(json);
+          const initial: Record<number, number[]> = {};
+          for (const q of json.questions || []) {
+            const selectedIds = (q.options || []).filter((o) => o.selected).map((o) => o.id);
+            if (selectedIds.length) initial[q.id] = selectedIds;
+          }
+          setQuizSelections(initial);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [quizId]);
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
@@ -575,6 +740,87 @@ function LessonDetailView({
   };
 
   const isCompleted = lesson.progress?.status === "completed";
+  const files = filesData?.records || [];
+
+  async function startQuizAttempt() {
+    if (!quizId) return;
+    setQuizSubmitting(true);
+    setQuizError(null);
+    try {
+      const res = await fetch(`/api/community/quizzes/${quizId}/attempts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | QuizAttempt
+        | { error?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(
+          (json && typeof (json as { error?: unknown }).error === "string"
+            ? (json as { error: string }).error
+            : null) || "Failed to start quiz",
+        );
+      }
+      setQuizAttempt(json as QuizAttempt);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          `quizAttempt:${quizId}`,
+          JSON.stringify({ attemptId: (json as QuizAttempt).id }),
+        );
+      }
+      const initial: Record<number, number[]> = {};
+      for (const q of (json as QuizAttempt).questions || []) {
+        const selectedIds = (q.options || []).filter((o) => o.selected).map((o) => o.id);
+        if (selectedIds.length) initial[q.id] = selectedIds;
+      }
+      setQuizSelections(initial);
+    } catch (e) {
+      setQuizError(e instanceof Error ? e.message : "Failed to start quiz");
+    } finally {
+      setQuizSubmitting(false);
+    }
+  }
+
+  async function submitQuizAttempt() {
+    if (!quizId) return;
+    setQuizSubmitting(true);
+    setQuizError(null);
+    try {
+      const responses = Object.entries(quizSelections).map(([questionId, selected]) => ({
+        question_id: Number(questionId),
+        selected_options: selected,
+      }));
+      const res = await fetch(`/api/community/quizzes/${quizId}/attempts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responses }),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | QuizAttempt
+        | { error?: string }
+        | null;
+      if (!res.ok) {
+        throw new Error(
+          (json && typeof (json as { error?: unknown }).error === "string"
+            ? (json as { error: string }).error
+            : null) || "Failed to submit quiz",
+        );
+      }
+      setQuizAttempt(json as QuizAttempt);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          `quizAttempt:${quizId}`,
+          JSON.stringify({ attemptId: (json as QuizAttempt).id }),
+        );
+      }
+    } catch (e) {
+      setQuizError(e instanceof Error ? e.message : "Failed to submit quiz");
+    } finally {
+      setQuizSubmitting(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
@@ -621,6 +867,150 @@ function LessonDetailView({
         </div>
       )}
 
+      {quizId && (
+        <div className="mb-6 rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold">Quiz</div>
+            {quizAttempt?.result && (
+              <Badge
+                variant={quizAttempt.result === "passed" ? "default" : "secondary"}
+              >
+                {quizAttempt.result}
+              </Badge>
+            )}
+          </div>
+
+          {quizAttempt?.result ? (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Grade:{" "}
+                <span className="font-medium text-foreground">
+                  {quizAttempt.grade ?? "-"}
+                </span>
+                {typeof quizAttempt.passing_grade === "number" && (
+                  <>
+                    {" "}
+                    · Passing:{" "}
+                    <span className="font-medium text-foreground">
+                      {quizAttempt.passing_grade}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {quizAttempt.description && (
+                <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {quizAttempt.description}
+                </div>
+              )}
+
+              {(quizAttempt.questions || []).map((q) => {
+                const selected = quizSelections[q.id] || [];
+                const hideAnswers = quizAttempt.hide_answers === true;
+                return (
+                  <div key={q.id} className="rounded-lg border bg-background p-4">
+                    <div className="mb-3 text-sm font-medium">
+                      {q.statement || "Question"}
+                    </div>
+                    <div className="space-y-2">
+                      {(q.options || []).map((o) => {
+                        const checked = selected.includes(o.id);
+                        const showCorrect = !hideAnswers && o.selected === true;
+                        return (
+                          <div
+                            key={o.id}
+                            className={cn(
+                              "flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
+                              checked ? "border-primary/40 bg-primary/5" : "",
+                              showCorrect ? "border-green-600/40" : "",
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "mt-0.5 h-4 w-4 rounded-full border",
+                                checked ? "border-primary bg-primary" : "border-muted-foreground/30",
+                              )}
+                            />
+                            <span className="leading-snug">{o.value || "Option"}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="flex items-center justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.localStorage.removeItem(`quizAttempt:${quizId}`);
+                    }
+                    setQuizAttempt(null);
+                    setQuizSelections({});
+                    setQuizError(null);
+                  }}
+                >
+                  Retake quiz
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                This lesson includes a quiz.
+              </div>
+              <Button onClick={startQuizAttempt} disabled={quizSubmitting}>
+                {quizSubmitting ? "Starting..." : "Start quiz"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mb-6 rounded-xl border bg-card p-4">
+        <div className="mb-2 text-sm font-semibold">Resources</div>
+        {filesLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        ) : filesError ? (
+          <div className="text-sm text-muted-foreground">
+            Unable to load lesson resources.
+          </div>
+        ) : files.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No resources for this lesson.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {files.map((f) => {
+              const href = f.url;
+              if (!href) return null;
+              return (
+                <li key={f.id}>
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary underline underline-offset-2 hover:opacity-90"
+                  >
+                    {f.filename || "Download"}
+                  </a>
+                  {typeof f.byte_size === "number" && f.byte_size > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {(f.byte_size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
       <div className="rounded-xl border bg-card p-4">
         <button
           onClick={() =>
@@ -650,7 +1040,7 @@ function LessonDetailView({
   );
 }
 
-function TiptapRenderer({ content }: { content: Record<string, unknown> }) {
+export function TiptapRenderer({ content }: { content: Record<string, unknown> }) {
   const renderNode = (
     node: Record<string, unknown>,
     index: number,

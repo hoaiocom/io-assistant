@@ -33,6 +33,9 @@ Spaces with `space_type: "course"` act as a container for course sections/lesson
 
 ### Acceptance checklist
 
-- [ ] Course spaces honor `visible_tabs` and match course + discussion expectations.
+- [x] Course spaces honor `visible_tabs` and match course + discussion expectations. *(Implemented in: `src/app/community/(main)/spaces/[id]/page.tsx` — course tabs; Discussion tab shows only when `space.visible_tabs.posts` is true.)*
 - [ ] Course-specific extras (files/quizzes/topics) are wired as per `community-courses.md`.
+  - [x] Lesson files/resources are visible in lesson view. *(Implemented in: `src/app/api/community/courses/[courseId]/lessons/[lessonId]/files/route.ts`, `src/lib/circle/headless-member.ts`, `src/components/community/CourseSpaceView.tsx`.)*
+  - [~] Quizzes endpoints + UI (attempt lifecycle). *(Implemented minimal attempt flow in: `src/app/api/community/quizzes/[quizId]/attempts/route.ts`, `src/app/api/community/quizzes/[quizId]/attempts/[attemptId]/route.ts`, `src/lib/circle/headless-member.ts`, `src/components/community/CourseSpaceView.tsx`; **Pending**: depends on lesson payload exposing `quiz_id` or `quiz.id`.)*
+  - [~] Course topics taxonomy + filters. *(Implemented topics proxy route in `src/app/api/community/course-topics/route.ts` + catalog UI in `src/app/community/(main)/courses/page.tsx`; **Pending**: filtering requires topic metadata per course in `/api/community/spaces`.)*
 

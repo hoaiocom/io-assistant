@@ -416,6 +416,59 @@ export function searchContent(
   return memberRequest<unknown>(`search?${query}`, token);
 }
 
+export type AdvancedSearchType =
+  | "general"
+  | "members"
+  | "posts"
+  | "comments"
+  | "spaces"
+  | "lessons"
+  | "events"
+  | "entity_list"
+  | "mentions";
+
+export type AdvancedSearchMentionScope = "space" | "group_chat" | "thread" | "direct";
+
+export function advancedSearch(
+  token: string,
+  params: {
+    query: string;
+    page?: number;
+    per_page?: number;
+    type?: AdvancedSearchType;
+    mention_scope?: AdvancedSearchMentionScope;
+    filters?: {
+      space_ids?: Array<number | string>;
+      topic_ids?: Array<number | string>;
+      member_tag_ids?: Array<number | string>;
+      author_name?: string;
+      status?: "upcoming" | "past";
+    };
+  },
+) {
+  const queryParams = new URLSearchParams();
+  queryParams.set("query", params.query);
+  if (params.page) queryParams.set("page", String(params.page));
+  if (params.per_page) queryParams.set("per_page", String(params.per_page));
+  if (params.type) queryParams.set("type", params.type);
+  if (params.mention_scope) queryParams.set("mention_scope", params.mention_scope);
+
+  const filters = params.filters;
+  if (filters?.author_name) queryParams.set("filters[author_name]", filters.author_name);
+  if (filters?.status) queryParams.set("filters[status]", filters.status);
+  for (const id of filters?.space_ids || []) {
+    queryParams.append("filters[space_ids]", String(id));
+  }
+  for (const id of filters?.topic_ids || []) {
+    queryParams.append("filters[topic_ids]", String(id));
+  }
+  for (const id of filters?.member_tag_ids || []) {
+    queryParams.append("filters[member_tag_ids]", String(id));
+  }
+
+  return memberRequest<unknown>(`advanced_search?${queryParams.toString()}`, token);
+}
+
 // Events
 export function getCommunityEvents(
   token: string,
@@ -476,6 +529,59 @@ export function updateLessonProgress(
     `courses/${courseId}/lessons/${lessonId}/progress`,
     token,
     { method: "PATCH", body: JSON.stringify(data) },
+  );
+}
+
+export function getCourseTopics(
+  token: string,
+  params?: { page?: number; per_page?: number },
+) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.per_page) query.set("per_page", String(params.per_page));
+  const qs = query.toString();
+  return memberRequest<unknown>(`course_topics${qs ? `?${qs}` : ""}`, token);
+}
+
+export function getCourseQuizAttempts(
+  token: string,
+  courseId: number,
+  params?: { page?: number; per_page?: number },
+) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.per_page) query.set("per_page", String(params.per_page));
+  const qs = query.toString();
+  return memberRequest<unknown>(
+    `courses/${courseId}/quiz_attempts${qs ? `?${qs}` : ""}`,
+    token,
+  );
+}
+
+export function createQuizAttempt(
+  token: string,
+  quizId: number,
+  data?: { responses?: Array<{ question_id: number; selected_options: number[] }> },
+) {
+  return memberRequest<unknown>(`quizzes/${quizId}/attempts`, token, {
+    method: "POST",
+    body: JSON.stringify(data || {}),
+  });
+}
+
+export function getQuizAttempt(
+  token: string,
+  quizId: number,
+  attemptId: number,
+  params?: { for_admin_review?: boolean },
+) {
+  const query = new URLSearchParams();
+  if (params?.for_admin_review !== undefined)
+    query.set("for_admin_review", String(params.for_admin_review));
+  const qs = query.toString();
+  return memberRequest<unknown>(
+    `quizzes/${quizId}/attempts/${attemptId}${qs ? `?${qs}` : ""}`,
+    token,
   );
 }
 

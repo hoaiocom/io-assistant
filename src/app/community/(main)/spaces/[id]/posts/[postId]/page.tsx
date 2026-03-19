@@ -10,18 +10,33 @@ import {
   MessageCircle,
   Bookmark,
   ArrowLeft,
-  Send,
   Share2,
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
   Calendar,
   MapPin,
+  Video,
+  Monitor,
+  CheckCircle2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { resolveBodyHtml } from "@/lib/tiptap-renderer";
@@ -68,6 +83,67 @@ function isMod(roles: unknown): boolean {
   return false;
 }
 
+function toIcsDate(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+}
+
+function downloadIcs({
+  title,
+  startsAt,
+  endsAt,
+  description,
+  location,
+}: {
+  title: string;
+  startsAt: Date;
+  endsAt?: Date | null;
+  description?: string | null;
+  location?: string | null;
+}) {
+  const dtStart = toIcsDate(startsAt);
+  const dtEnd = endsAt
+    ? toIcsDate(endsAt)
+    : toIcsDate(new Date(startsAt.getTime() + 60 * 60 * 1000));
+  const now = toIcsDate(new Date());
+  const uid = `${Math.random().toString(36).slice(2)}@io-assistant`;
+  const clean = (s: string) =>
+    s
+      .replace(/\r?\n/g, "\\n")
+      .replace(/,/g, "\\,")
+      .replace(/;/g, "\\;");
+
+  const body = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//io-assistant//circle-events//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${clean(title || "Event")}`,
+    location ? `LOCATION:${clean(location)}` : null,
+    description ? `DESCRIPTION:${clean(description)}` : null,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+
+  const blob = new Blob([body], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(title || "event").slice(0, 60).replace(/[^\w\- ]+/g, "").trim() || "event"}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // --------------- Types ---------------
 
 interface MemberTag {
@@ -110,6 +186,35 @@ interface CommentData {
     can_edit?: boolean;
     can_report?: boolean;
   };
+}
+
+function AttendeeAvatar({
+  src,
+  name,
+}: {
+  src?: string | null;
+  name: string;
+}) {
+  if (!src) {
+    return (
+      <div
+        className="flex h-7 w-7 items-center justify-center rounded-full border bg-muted text-[10px] font-medium text-muted-foreground"
+        aria-label={name}
+        title={name}
+      >
+        {name.slice(0, 1).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      title={name}
+      referrerPolicy="no-referrer"
+      className="h-7 w-7 rounded-full border object-cover"
+    />
+  );
 }
 
 // --------------- Comment Component ---------------
@@ -418,6 +523,8 @@ export default function PostDetailPage() {
   const [commentBody, setCommentBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [commentPage, setCommentPage] = useState(1);
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   const {
     data: post,
@@ -491,7 +598,7 @@ export default function PostDetailPage() {
   // Loading skeleton
   if (postLoading) {
     return (
-      <div className="mx-auto max-w-[680px] px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8">
         <Skeleton className="h-5 w-28 mb-6" />
         <div className="rounded-xl border bg-card p-6 sm:p-8">
           <Skeleton className="h-7 w-3/4 mb-5" />
@@ -516,7 +623,7 @@ export default function PostDetailPage() {
 
   if (!post) {
     return (
-      <div className="mx-auto max-w-[680px] px-4 py-12 text-center">
+      <div className="mx-auto max-w-6xl px-4 py-12 text-center">
         <p className="text-muted-foreground">Post not found</p>
       </div>
     );
@@ -530,6 +637,10 @@ export default function PostDetailPage() {
   const authorTags: MemberTag[] =
     author?.member_tags?.filter((t: MemberTag) => t.is_public !== false) || [];
   const title = post.display_title || post.name || "";
+  const galleryImages =
+    (post as {
+      gallery?: { images?: Array<{ id: number; url?: string; original_url?: string }> };
+    }).gallery?.images || [];
   const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
   const commentCount = post.comment_count ?? post.comments_count ?? 0;
   const dateStr = formatDate(post.published_at || post.created_at);
@@ -562,374 +673,644 @@ export default function PostDetailPage() {
         : eventSettings?.in_person_location || null;
   const locationUrl =
     (eventSettings?.virtual_location_url as string | undefined) || null;
+  const hideAttendees = eventSettings?.hide_attendees === true;
+  const hideLocationFromNonAttendees =
+    eventSettings?.hide_location_from_non_attendees === true;
+  const attendeeCount =
+    (post as any)?.event_attendees?.count ??
+    eventSettings?.rsvp_count ??
+    0;
+  const attendeePreview: Array<{
+    id: number;
+    name: string;
+    avatar_url?: string | null;
+  }> = (post as any)?.event_attendees?.records || [];
+  const isGoing =
+    (post as any)?.rsvped_event === true || (post as any)?.rsvp_status === "yes";
+  const rsvpDisabled = eventSettings?.rsvp_disabled === true;
+
+  async function handleRsvp() {
+    try {
+      const res = await fetch(`/api/community/events/${post.id}/rsvp`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
+      mutatePost();
+      toast.success("RSVP confirmed!");
+    } catch {
+      toast.error("Failed to RSVP");
+    }
+  }
+
+  const sidebarLocationLabel =
+    locationType === "virtual"
+      ? "Join live stream"
+      : locationType === "live_room"
+        ? "Go live"
+        : null;
+  const showJoinLink =
+    !!locationUrl && (locationType === "virtual" || locationType === "live_room");
+  const canShowLocationUrl =
+    showJoinLink && (!hideLocationFromNonAttendees || isGoing);
+  const LocationIcon = locationType === "live_room" ? Monitor : Video;
+  const isEventPost = !!eventSettings;
 
   return (
-    <div className="mx-auto max-w-[680px] px-4 py-6 sm:px-6">
+    <div
+      className={cn(
+        "mx-auto px-4 py-6 sm:px-8",
+        "max-w-6xl",
+      )}
+    >
       {/* Back link */}
       <Link
         href={`/community/spaces/${spaceId}`}
         className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to space
+        Back to {isEventPost ? "Events" : "space"}
       </Link>
 
-      {/* ===== Post Card ===== */}
-      <article className="rounded-xl border bg-card shadow-sm">
-        {coverImage && (
-          <div className="relative aspect-[2.5/1] overflow-hidden rounded-t-xl">
-            <img
-              src={coverImage}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          </div>
+      <div
+        className={cn(
+          isEventPost ? "grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]" : "",
         )}
-
-        <div className="p-5 sm:p-7">
-          {/* Title + actions */}
-          {title && (
-            <div className="flex items-start gap-3 mb-5">
-              <h1 className="flex-1 text-[1.375rem] font-bold leading-snug tracking-tight">
-                {title}
-              </h1>
-              <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={handleBookmark}
-                >
-                  <Bookmark
-                    className={cn(
-                      "h-[18px] w-[18px]",
-                      post.bookmark_id && "fill-current text-primary",
-                    )}
-                  />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-muted-foreground hover:text-foreground text-xs gap-1"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  Share
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                >
-                  <MoreHorizontal className="h-[18px] w-[18px]" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Author row */}
-          <div className="flex items-center gap-3 mb-6">
-            <Link href={authorId ? `/community/members/${authorId}` : "#"}>
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={authorAvatar || undefined} />
-                <AvatarFallback className="text-xs font-medium">
-                  {getInitials(authorName)}
-                </AvatarFallback>
-              </Avatar>
-            </Link>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Link
-                  href={authorId ? `/community/members/${authorId}` : "#"}
-                  className="text-sm font-semibold hover:underline"
-                >
-                  {authorName}
-                </Link>
-                {isAdmin(author?.roles) && (
-                  <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0 leading-4 rounded-[4px] hover:bg-blue-600 font-medium">
-                    Admin
-                  </Badge>
-                )}
-                {isMod(author?.roles) && (
-                  <Badge
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0 leading-4 rounded-[4px] font-medium"
-                  >
-                    Mod
-                  </Badge>
-                )}
-                {authorTags.slice(0, 2).map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0 leading-4 rounded-[4px] font-normal"
-                    style={
-                      tag.color
-                        ? { borderColor: tag.color, color: tag.color }
-                        : undefined
-                    }
-                  >
-                    {tag.emoji && (
-                      <span className="mr-0.5">{tag.emoji}</span>
-                    )}
-                    {tag.name}
-                  </Badge>
-                ))}
-                {dateStr && (
+      >
+        <div>
+          {/* ===== Post Card ===== */}
+          <article className="rounded-xl border bg-card shadow-sm">
+            {galleryImages.length > 0 ? (
+              <div className="relative overflow-hidden rounded-t-xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    galleryImages[galleryIndex]?.url ||
+                    galleryImages[galleryIndex]?.original_url ||
+                    ""
+                  }
+                  alt=""
+                  className="h-full w-full aspect-square object-cover"
+                />
+                {galleryImages.length > 1 && (
                   <>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground">
-                      {dateStr}
-                    </span>
+                    <button
+                      type="button"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-2 py-1 text-sm text-white hover:bg-black/80"
+                      onClick={() =>
+                        setGalleryIndex((i) =>
+                          i === 0 ? galleryImages.length - 1 : i - 1,
+                        )
+                      }
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-2 py-1 text-sm text-white hover:bg-black/80"
+                      onClick={() =>
+                        setGalleryIndex((i) =>
+                          i === galleryImages.length - 1 ? 0 : i + 1,
+                        )
+                      }
+                    >
+                      ›
+                    </button>
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1">
+                      {galleryImages.map((img, idx) => (
+                        <button
+                          key={img.id ?? idx}
+                          type="button"
+                          onClick={() => setGalleryIndex(idx)}
+                          className={`h-1.5 w-4 rounded-full ${
+                            idx === galleryIndex ? "bg-white" : "bg-white/40"
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </>
                 )}
               </div>
-              {authorHeadline && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {authorHeadline}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Pinned indicator */}
-          {isPinned && (
-            <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <svg
-                className="h-3.5 w-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M12 2l0 20M5 12l7-7 7 7" />
-              </svg>
-              Pinned post
-            </div>
-          )}
-
-          {/* Event meta (for event posts) */}
-          {eventSettings && (
-            <div className="mb-5 rounded-lg border bg-muted/20 p-4">
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                {startsAt && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      {format(startsAt, "EEEE, MMM d")} ·{" "}
-                      {format(startsAt, "h:mm a")}
-                      {endsAt ? ` – ${format(endsAt, "h:mm a")}` : ""}
-                    </span>
-                  </div>
-                )}
-                {locationLabel && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    {locationUrl ? (
-                      <a
-                        href={locationUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline underline-offset-2 hover:text-foreground"
-                      >
-                        {locationLabel}
-                      </a>
-                    ) : (
-                      <span>{locationLabel}</span>
-                    )}
-                  </div>
-                )}
+            ) : coverImage ? (
+              <div className="relative aspect-[2.5/1] overflow-hidden rounded-t-xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={coverImage} alt="" className="h-full w-full object-cover" />
               </div>
-            </div>
-          )}
+            ) : null}
 
-          {/* Body content */}
-          {(bodyHtml || post.tiptap_body || bodyText) ? (
-            <RichText
-              tiptap={(post as any).tiptap_body}
-              html={bodyHtml}
-              text={bodyText}
-            />
-          ) : null}
-
-          {/* Topics */}
-          {post.topics && post.topics.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-1.5">
-              {post.topics.map((t: { id: number; name: string }) => (
-                <Badge
-                  key={t.id}
-                  variant="outline"
-                  className="text-xs font-normal"
-                >
-                  {t.name}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* ===== Action bar ===== */}
-          <div className="mt-6 border-t pt-3">
-            <div className="flex items-center">
-              <div className="flex items-center gap-0.5">
-                {isLikingEnabled && (
-                  <button
-                    onClick={handleLike}
-                    className={cn(
-                      "inline-flex items-center justify-center h-8 w-8 rounded-md transition-colors",
-                      post.is_liked
-                        ? "text-red-500 hover:bg-red-50"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <Heart
-                      className={cn(
-                        "h-[18px] w-[18px]",
-                        post.is_liked && "fill-current",
-                      )}
-                    />
-                  </button>
-                )}
-                {isCommentsEnabled && (
-                  <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                    <MessageCircle className="h-[18px] w-[18px]" />
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 ml-auto">
-                {firstLikedBy.length > 0 && (
-                  <div className="flex -space-x-1.5">
-                    {firstLikedBy
-                      .slice(0, 3)
-                      .map(
-                        (
-                          m: {
-                            community_member_id?: number;
-                            id?: number;
-                            name: string;
-                            avatar_url?: string | null;
-                          },
-                          i: number,
-                        ) => (
-                          <Avatar
-                            key={m.community_member_id || m.id || i}
-                            className="h-5 w-5 border-2 border-card"
-                          >
-                            <AvatarImage src={m.avatar_url || undefined} />
-                            <AvatarFallback className="text-[7px]">
-                              {getInitials(m.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ),
-                      )}
-                  </div>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  {likeCount > 0 && (
-                    <>
-                      {likeCount} {likeCount === 1 ? "like" : "likes"}
-                    </>
-                  )}
-                  {likeCount > 0 && commentCount > 0 && " · "}
-                  {commentCount > 0 && (
-                    <>
-                      {commentCount}{" "}
-                      {commentCount === 1 ? "comment" : "comments"}
-                    </>
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      {/* ===== Comments Section ===== */}
-      {isCommentsEnabled && (
-        <div className="mt-4">
-          {/* Threaded comments */}
-          {commentsLoading ? (
-            <div className="space-y-3 mt-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex gap-3 py-4">
-                  <Skeleton className="h-9 w-9 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-3.5 w-28" />
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-2/3" />
+            <div className="p-5 sm:p-7">
+              {/* Title + actions */}
+              {title && galleryImages.length === 0 && (
+                <div className="flex items-start gap-3 mb-5">
+                  <h1 className="flex-1 text-[1.375rem] font-bold leading-snug tracking-tight">
+                    {title}
+                  </h1>
+                  <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={handleBookmark}
+                    >
+                      <Bookmark
+                        className={cn(
+                          "h-[18px] w-[18px]",
+                          post.bookmark_id && "fill-current text-primary",
+                        )}
+                      />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-muted-foreground hover:text-foreground text-xs gap-1"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    >
+                      <MoreHorizontal className="h-[18px] w-[18px]" />
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : comments.length > 0 ? (
-            <div className="divide-y">
-              {comments.map((comment) => (
-                <CommentItem
-                  key={comment.id}
-                  comment={comment}
-                  postId={postId}
-                  depth={0}
-                  onMutate={handleMutateComments}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No comments yet. Be the first to comment!
-            </p>
-          )}
+              )}
 
-          {hasMoreComments && (
-            <div className="text-center py-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCommentPage((p) => p + 1)}
-                className="text-muted-foreground"
-              >
-                Load more comments
-              </Button>
-            </div>
-          )}
-
-          {/* Comment form */}
-          {!isCommentsClosed ? (
-            <div className="mt-2 border-t pt-4">
-              <div className="flex items-start gap-3">
-                <Avatar className="h-9 w-9 shrink-0 mt-0.5">
-                  <AvatarFallback className="text-[10px]">You</AvatarFallback>
-                </Avatar>
-                <form onSubmit={handleSubmitComment} className="flex-1">
-                  <div className="rounded-xl border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
-                    <textarea
-                      value={commentBody}
-                      onChange={(e) => setCommentBody(e.target.value)}
-                      placeholder="What are your thoughts?"
-                      rows={2}
-                      className="w-full border-0 bg-transparent px-4 pt-3 pb-2 text-sm placeholder:text-muted-foreground focus:outline-none resize-none"
-                    />
-                    <div className="flex justify-end px-3 pb-2">
-                      <Button
-                        size="sm"
-                        type="submit"
-                        disabled={submitting || !commentBody.trim()}
-                        className="rounded-lg px-4 h-8"
+              {/* Author row */}
+              <div className="flex items-center gap-3 mb-6">
+                <Link href={authorId ? `/community/members/${authorId}` : "#"}>
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={authorAvatar || undefined} />
+                    <AvatarFallback className="text-xs font-medium">
+                      {getInitials(authorName)}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={authorId ? `/community/members/${authorId}` : "#"}
+                      className="text-sm font-semibold hover:underline"
+                    >
+                      {authorName}
+                    </Link>
+                    {isAdmin(author?.roles) && (
+                      <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0 leading-4 rounded-[4px] hover:bg-blue-600 font-medium">
+                        Admin
+                      </Badge>
+                    )}
+                    {isMod(author?.roles) && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1.5 py-0 leading-4 rounded-[4px] font-medium"
                       >
-                        {submitting ? "Posting..." : "Post"}
-                      </Button>
+                        Mod
+                      </Badge>
+                    )}
+                    {authorTags.slice(0, 2).map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 leading-4 rounded-[4px] font-normal"
+                        style={
+                          tag.color
+                            ? { borderColor: tag.color, color: tag.color }
+                            : undefined
+                        }
+                      >
+                        {tag.emoji && <span className="mr-0.5">{tag.emoji}</span>}
+                        {tag.name}
+                      </Badge>
+                    ))}
+                    {dateStr && (
+                      <>
+                        <span className="text-xs text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground">{dateStr}</span>
+                      </>
+                    )}
+                  </div>
+                  {authorHeadline && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {authorHeadline}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Pinned indicator */}
+              {isPinned && (
+                <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path d="M12 2l0 20M5 12l7-7 7 7" />
+                  </svg>
+                  Pinned post
+                </div>
+              )}
+
+              {/* For non-event posts, keep small inline meta */}
+              {!isEventPost && locationLabel && (
+                <div className="mb-5 rounded-lg border bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                    {startsAt && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          {format(startsAt, "EEEE, MMM d")} · {format(startsAt, "h:mm a")}
+                          {endsAt ? ` – ${format(endsAt, "h:mm a")}` : ""}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {locationUrl ? (
+                        <a
+                          href={locationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          {locationLabel}
+                        </a>
+                      ) : (
+                        <span>{locationLabel}</span>
+                      )}
                     </div>
                   </div>
-                </form>
+                </div>
+              )}
+
+              {/* Body content */}
+              {bodyHtml || (post as any).tiptap_body || bodyText ? (
+                <RichText tiptap={(post as any).tiptap_body} html={bodyHtml} text={bodyText} />
+              ) : null}
+
+              {/* Topics */}
+              {post.topics && post.topics.length > 0 && (
+                <div className="mt-5 flex flex-wrap gap-1.5">
+                  {post.topics.map((t: { id: number; name: string }) => (
+                    <Badge key={t.id} variant="outline" className="text-xs font-normal">
+                      {t.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* ===== Action bar ===== */}
+              <div className="mt-6 border-t pt-3">
+                <div className="flex items-center">
+                  <div className="flex items-center gap-0.5">
+                    {isLikingEnabled && (
+                      <button
+                        onClick={handleLike}
+                        className={cn(
+                          "inline-flex items-center justify-center h-8 w-8 rounded-md transition-colors",
+                          post.is_liked
+                            ? "text-red-500 hover:bg-red-50"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        <Heart
+                          className={cn("h-[18px] w-[18px]", post.is_liked && "fill-current")}
+                        />
+                      </button>
+                    )}
+                    {isCommentsEnabled && (
+                      <button className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                        <MessageCircle className="h-[18px] w-[18px]" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    {firstLikedBy.length > 0 && (
+                      <div className="flex -space-x-1.5">
+                        {firstLikedBy.slice(0, 3).map(
+                          (
+                            m: {
+                              community_member_id?: number;
+                              id?: number;
+                              name: string;
+                              avatar_url?: string | null;
+                            },
+                            i: number,
+                          ) => (
+                            <Avatar
+                              key={m.community_member_id || m.id || i}
+                              className="h-5 w-5 border-2 border-card"
+                            >
+                              <AvatarImage src={m.avatar_url || undefined} />
+                              <AvatarFallback className="text-[7px]">
+                                {getInitials(m.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          ),
+                        )}
+                      </div>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {likeCount > 0 && (
+                        <>
+                          {likeCount} {likeCount === 1 ? "like" : "likes"}
+                        </>
+                      )}
+                      {likeCount > 0 && commentCount > 0 && " · "}
+                      {commentCount > 0 && (
+                        <>
+                          {commentCount} {commentCount === 1 ? "comment" : "comments"}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="mt-4 border-t pt-4">
-              <p className="text-center text-sm text-muted-foreground">
-                Comments are closed for this post.
-              </p>
+          </article>
+
+          {/* ===== Comments Section ===== */}
+          {isCommentsEnabled && (
+            <div className="mt-4">
+              {/* Threaded comments */}
+              {commentsLoading ? (
+                <div className="space-y-3 mt-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex gap-3 py-4">
+                      <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3.5 w-28" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : comments.length > 0 ? (
+                <div className="divide-y">
+                  {comments.map((comment) => (
+                    <CommentItem
+                      key={comment.id}
+                      comment={comment}
+                      postId={postId}
+                      depth={0}
+                      onMutate={handleMutateComments}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No comments yet. Be the first to comment!
+                </p>
+              )}
+
+              {hasMoreComments && (
+                <div className="text-center py-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCommentPage((p) => p + 1)}
+                    className="text-muted-foreground"
+                  >
+                    Load more comments
+                  </Button>
+                </div>
+              )}
+
+              {/* Comment form */}
+              {!isCommentsClosed ? (
+                <div className="mt-2 border-t pt-4">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                      <AvatarFallback className="text-[10px]">You</AvatarFallback>
+                    </Avatar>
+                    <form onSubmit={handleSubmitComment} className="flex-1">
+                      <div className="rounded-xl border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
+                        <textarea
+                          value={commentBody}
+                          onChange={(e) => setCommentBody(e.target.value)}
+                          placeholder="What are your thoughts?"
+                          rows={2}
+                          className="w-full border-0 bg-transparent px-4 pt-3 pb-2 text-sm placeholder:text-muted-foreground focus:outline-none resize-none"
+                        />
+                        <div className="flex justify-end px-3 pb-2">
+                          <Button
+                            size="sm"
+                            type="submit"
+                            disabled={submitting || !commentBody.trim()}
+                            className="rounded-lg px-4 h-8"
+                          >
+                            {submitting ? "Posting..." : "Post"}
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 border-t pt-4">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Comments are closed for this post.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+
+        {/* ===== Sidebar for event posts ===== */}
+        {isEventPost && (
+          <aside>
+            <div className="sticky top-20 space-y-4">
+              <div className="rounded-xl border bg-card p-4">
+                {startsAt && (
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-muted">
+                      <div className="text-center leading-tight">
+                        <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                          {format(startsAt, "MMM")}
+                        </div>
+                        <div className="text-base font-semibold">{format(startsAt, "d")}</div>
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">{format(startsAt, "EEEE, MMM d")}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {format(startsAt, "h:mm a")}
+                        {endsAt ? ` – ${format(endsAt, "h:mm a")}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {canShowLocationUrl && sidebarLocationLabel && (
+                  <a
+                    href={locationUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-95"
+                  >
+                    <LocationIcon className="h-4 w-4" />
+                    {sidebarLocationLabel}
+                  </a>
+                )}
+
+                <div className="mt-3">
+                  {isGoing ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 dark:border-green-800 dark:bg-green-950/40 dark:text-green-400 dark:hover:bg-green-950/60">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Going
+                          <ChevronDown className="h-3 w-3 opacity-60" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem disabled className="gap-2 text-green-700 dark:text-green-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Going
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled className="gap-2">
+                          Not going
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : rsvpDisabled ? (
+                    <div className="inline-flex w-full items-center justify-center rounded-lg border px-3 py-2 text-sm text-muted-foreground">
+                      RSVP closed
+                    </div>
+                  ) : (
+                    <Button variant="outline" className="w-full" onClick={handleRsvp}>
+                      RSVP
+                    </Button>
+                  )}
+                </div>
+
+                {startsAt && (
+                  <Button
+                    variant="outline"
+                    className="mt-3 w-full gap-2"
+                    onClick={() =>
+                      downloadIcs({
+                        title: title || "Event",
+                        startsAt,
+                        endsAt,
+                        description:
+                          (post as any)?.body_plain_text_without_attachments ||
+                          (post as any)?.body_plain_text ||
+                          null,
+                        location: locationLabel,
+                      })
+                    }
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Add to calendar
+                  </Button>
+                )}
+              </div>
+
+              {!hideAttendees && attendeeCount > 0 && (
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm font-semibold">
+                      {attendeeCount} Attendee{attendeeCount !== 1 ? "s" : ""}
+                    </div>
+                    <Dialog open={attendeesOpen} onOpenChange={setAttendeesOpen}>
+                      <DialogTrigger asChild>
+                        <button className="text-sm font-medium text-primary hover:underline">
+                          See all
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Attendees</DialogTitle>
+                        </DialogHeader>
+                        <EventAttendeesList eventId={post.id} preview={attendeePreview} />
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  <div className="space-y-3">
+                    {attendeePreview.slice(0, 3).map((m) => (
+                      <div key={m.id} className="flex items-center gap-2.5">
+                        <AttendeeAvatar src={m.avatar_url} name={m.name} />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{m.name}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EventAttendeesList({
+  eventId,
+  preview,
+}: {
+  eventId: number;
+  preview: Array<{ id: number; name: string; avatar_url?: string | null }>;
+}) {
+  const { data, isLoading, error } = useSWR(
+    `/api/community/events/${eventId}/rsvp`,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const records: Array<{ id: number; name: string; avatar_url?: string | null }> =
+    data?.records || preview || [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center gap-2.5">
+            <Skeleton className="h-7 w-7 rounded-full" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+        Failed to load attendees.
+      </div>
+    );
+  }
+
+  if (!records.length) {
+    return (
+      <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+        No attendees yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-80 overflow-auto pr-1">
+      <div className="space-y-2">
+        {records.map((m) => (
+          <div key={m.id} className="flex items-center gap-2.5">
+            <AttendeeAvatar src={m.avatar_url} name={m.name} />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{m.name}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

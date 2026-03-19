@@ -314,7 +314,7 @@ export function RichText({
       <div
         className={cn(
           // Consistent Circle-like rendering across community chat/DM
-          "prose prose-sm max-w-none text-foreground",
+          "prose prose-base max-w-none text-foreground",
           "prose-p:my-1 prose-li:my-0.5 prose-ul:my-2 prose-ol:my-2",
           "prose-a:text-blue-600 prose-a:underline hover:prose-a:text-blue-700",
           "prose-blockquote:border-l-2 prose-blockquote:pl-3 prose-blockquote:text-muted-foreground",

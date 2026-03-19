@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { useDebounce } from "@/hooks/use-debounce";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -48,6 +49,7 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 250);
 
   const { data: profile } = useSWR("/api/community/profile", fetcher, {
     revalidateOnFocus: false,
@@ -76,9 +78,61 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/community/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchOpen(false);
     }
+  }
+
+  type SearchSuggestion = {
+    id: number;
+    display_title?: string;
+    name?: string;
+    highlighted_name?: string;
+    record_type?: string;
+    type?: string;
+    space_id?: number;
+    post_id?: number;
+  };
+
+  const { data: searchData } = useSWR(
+    searchOpen && debouncedSearch.trim().length > 3
+      ? `/api/community/search?q=${encodeURIComponent(debouncedSearch.trim())}&per_page=5`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const suggestions: SearchSuggestion[] = searchData?.records || [];
+
+  function getSuggestionType(s: SearchSuggestion) {
+    return (s.record_type || s.type || "").toString().toLowerCase();
+  }
+
+  function getSuggestionHref(s: SearchSuggestion): string | null {
+    const t = getSuggestionType(s);
+
+    if (t === "post") {
+      if (typeof s.space_id === "number")
+        return `/community/spaces/${s.space_id}/posts/${s.id}`;
+      return null;
+    }
+
+    if (t === "comment") {
+      if (typeof s.space_id === "number" && typeof s.post_id === "number") {
+        return `/community/spaces/${s.space_id}/posts/${s.post_id}`;
+      }
+      return null;
+    }
+
+    if (t === "space") {
+      return `/community/spaces/${s.id}`;
+    }
+
+    if (t === "member") {
+      return `/community/members/${s.id}`;
+    }
+
+    return null;
   }
 
   const initials = profile?.name
@@ -141,18 +195,63 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
         <div className="flex-1" />
 
         {searchOpen ? (
-          <form onSubmit={handleSearch} className="flex items-center gap-2">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search..."
-              className="h-8 w-48 text-sm"
-              autoFocus
-              onBlur={() => {
-                if (!searchQuery) setSearchOpen(false);
-              }}
-            />
-          </form>
+          <div className="relative">
+            <form onSubmit={handleSearch} className="flex items-center gap-2">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="h-8 w-56 text-sm"
+                autoFocus
+              />
+            </form>
+            {searchQuery.trim().length > 3 && (
+              <div className="absolute right-0 z-40 mt-1 w-72 rounded-md border bg-popover text-popover-foreground shadow-md">
+                {(!suggestions || suggestions.length === 0) && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    No results for &quot;{debouncedSearch.trim()}&quot;
+                  </div>
+                )}
+                {suggestions && suggestions.length > 0 && (
+                  <ul className="max-h-72 overflow-auto py-1 text-sm">
+                    {suggestions.map((s) => {
+                      const title =
+                        s.display_title || s.highlighted_name || s.name || "Untitled";
+                          const type = getSuggestionType(s);
+                          const directHref = getSuggestionHref(s);
+                      return (
+                        <li key={`${type}-${s.id}`}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-2 px-3 py-1.5 hover:bg-muted"
+                            onClick={() => {
+                                  if (directHref) {
+                                    router.push(directHref);
+                                  } else {
+                                    router.push(
+                                      `/community/search?q=${encodeURIComponent(
+                                        debouncedSearch.trim(),
+                                      )}&type=${type || "all"}`,
+                                    );
+                                  }
+                              setSearchOpen(false);
+                            }}
+                          >
+                            <span className="truncate">{title}</span>
+                            {type && (
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                {type}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <Button
             variant="ghost"

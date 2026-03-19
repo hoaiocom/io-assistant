@@ -6,13 +6,14 @@ import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { Users, Lock, Globe, Plus, Pin } from "lucide-react";
 import { PostCard, type PostCardData } from "@/components/community/PostCard";
+import { ImagePostsGrid, type ImageGridPost } from "@/components/community/ImagePostsGrid";
 import { ChatSpaceView } from "@/components/community/ChatSpaceView";
-import { CourseSpaceView, CourseLockedView } from "@/components/community/CourseSpaceView";
+import { CourseSpaceView, CourseLockedView, TiptapRenderer } from "@/components/community/CourseSpaceView";
 import { EventSpaceView } from "@/components/community/EventSpaceView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -69,6 +70,7 @@ export default function SpaceDetailPage() {
   const [creating, setCreating] = useState(false);
   const [layout, setLayout] = useState<"feed" | "list" | "card">("feed");
   const [selectedTopics, setSelectedTopics] = useState<number[]>([]);
+  const [courseTab, setCourseTab] = useState<"course" | "overview" | "discussion">("course");
 
   const { data: space, isLoading: spaceLoading, mutate: mutateSpace } = useSWR(
     `/api/community/spaces/${id}`,
@@ -94,6 +96,18 @@ export default function SpaceDetailPage() {
   const isChatSpace = space?.space_type === "chat";
   const isCourseSpace = space?.space_type === "course";
   const isEventSpace = space?.space_type === "event";
+  const isImageSpace = space?.space_type === "image";
+
+  const hasOverview =
+    typeof (space as { description?: unknown } | undefined)?.description === "string" &&
+    ((space as { description?: string }).description?.trim()?.length || 0) > 0;
+
+  const hasRichOverview =
+    !!(space as { rich_text_body?: unknown } | undefined)?.rich_text_body &&
+    typeof (space as { rich_text_body?: unknown }).rich_text_body === "object";
+
+  const showOverviewTab = hasOverview || hasRichOverview;
+  const showDiscussionTab = !!(space as { visible_tabs?: { posts?: boolean } } | undefined)?.visible_tabs?.posts;
 
   const topicsEnabled = !!space && (space.topics_count ?? 0) > 0;
   const requireTopicSelection = !!space?.require_topic_selection;
@@ -101,7 +115,7 @@ export default function SpaceDetailPage() {
   const hideSorting = space?.hide_sorting === true;
 
   const { data: topicsData, isLoading: topicsLoading } = useSWR(
-    !isChatSpace && !isCourseSpace && !isEventSpace && topicsEnabled
+    !isChatSpace && !isEventSpace && topicsEnabled && (!isCourseSpace || courseTab === "discussion")
       ? `/api/community/spaces/${id}/topics?per_page=200`
       : null,
     fetcher,
@@ -118,7 +132,10 @@ export default function SpaceDetailPage() {
   }, [selectedTopics]);
 
   const { data: postsData, isLoading: postsLoading, mutate } = useSWR(
-    !isChatSpace && !isCourseSpace && !isEventSpace
+    !isChatSpace &&
+      !isEventSpace &&
+      (!isCourseSpace || courseTab === "discussion") &&
+      (!isCourseSpace || showDiscussionTab)
       ? `/api/community/spaces/${id}/posts?page=${page}&per_page=20${sort && sort !== "latest" ? `&sort=${encodeURIComponent(sort)}` : ""}${topicsQuery}`
       : null,
     fetcher,
@@ -126,13 +143,16 @@ export default function SpaceDetailPage() {
   );
 
   const posts: PostCardData[] = postsData?.records || [];
+  const imagePosts = useMemo(() => {
+    if (!isImageSpace) return [];
+    return posts.filter(
+      (p) => (p as { post_type?: string | null }).post_type === "image",
+    ) as unknown as ImageGridPost[];
+  }, [isImageSpace, posts]);
   const hasNextPage = postsData?.has_next_page || false;
 
   const pinnedPosts = posts.filter((p) => p.is_pinned_at_top_of_space);
   const regularPosts = posts.filter((p) => !p.is_pinned_at_top_of_space);
-
-  const topicSelectionBlocked =
-    requireTopicSelection && topicsEnabled && selectedTopics.length === 0;
 
   const handleLike = useCallback(
     async (postId: number, liked: boolean) => {
@@ -212,7 +232,441 @@ export default function SpaceDetailPage() {
     if (space.is_member === false) {
       return <CourseLockedView space={space} onJoin={handleJoin} />;
     }
-    return <CourseSpaceView space={space} spaceId={id} />;
+
+    const effectiveTab: typeof courseTab =
+      courseTab === "overview" && !showOverviewTab
+        ? "course"
+        : courseTab === "discussion" && !showDiscussionTab
+          ? "course"
+          : courseTab;
+
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <Tabs value={effectiveTab} onValueChange={(v) => setCourseTab(v as typeof courseTab)}>
+          <TabsList className="h-9">
+            <TabsTrigger value="course" className="text-xs">
+              Course
+            </TabsTrigger>
+            {showOverviewTab && (
+              <TabsTrigger value="overview" className="text-xs">
+                Overview
+              </TabsTrigger>
+            )}
+            {showDiscussionTab && (
+              <TabsTrigger value="discussion" className="text-xs">
+                Discussion
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="course" className="mt-4">
+            <CourseSpaceView space={space} spaceId={id} />
+          </TabsContent>
+
+          {showOverviewTab && (
+            <TabsContent value="overview" className="mt-4">
+              <div className="rounded-xl border bg-card p-6">
+                <div className="mb-3 text-lg font-semibold">{space.name}</div>
+                {hasOverview && (
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {(space as { description: string }).description}
+                  </p>
+                )}
+                {!hasOverview && hasRichOverview && (
+                  <div className="prose prose-sm max-w-none">
+                    <TiptapRenderer
+                      content={
+                        ((space as { rich_text_body: { body?: Record<string, unknown> } }).rich_text_body
+                          ?.body || {}) as Record<string, unknown>
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          )}
+
+          {showDiscussionTab && (
+            <TabsContent value="discussion" className="mt-4">
+              <div className="mx-auto max-w-5xl px-1 sm:px-0">
+                {/* Posting disabled banner */}
+                {space?.is_post_disabled === true && (
+                  <div className="mb-4 rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
+                    Posting is currently disabled in this space.
+                  </div>
+                )}
+
+                {/* Topic navigation */}
+                {topicsEnabled && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium">Topics</div>
+                      {selectedTopics.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          onClick={handleClearTopics}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                      {topicsLoading ? (
+                        <>
+                          {[0, 1, 2, 3, 4].map((i) => (
+                            <Skeleton key={i} className="h-8 w-20 rounded-full" />
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          {/* "All" pseudo-topic: shows all posts when no topic filters are selected */}
+                          <button
+                            type="button"
+                            onClick={handleClearTopics}
+                            className="shrink-0"
+                          >
+                            <Badge
+                              variant={selectedTopics.length === 0 ? "default" : "outline"}
+                              className="h-8 rounded-full px-3 text-xs font-medium"
+                            >
+                              All
+                            </Badge>
+                          </button>
+
+                          {topics.map((t) => {
+                            const active = selectedTopics.includes(t.id);
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleToggleTopic(t.id)}
+                                className="shrink-0"
+                              >
+                                <Badge
+                                  variant={active ? "default" : "outline"}
+                                  className="h-8 rounded-full px-3 text-xs font-medium"
+                                >
+                                  {t.name}
+                                </Badge>
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Toolbar: sort + new post */}
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {!isImageSpace && (
+                      <>
+                        <Tabs value={layout} onValueChange={(v) => setLayout(v as typeof layout)}>
+                          <TabsList className="h-8">
+                            <TabsTrigger value="feed" className="text-xs">
+                              Feed
+                            </TabsTrigger>
+                            <TabsTrigger value="list" className="text-xs">
+                              List
+                            </TabsTrigger>
+                            <TabsTrigger value="card" className="text-xs">
+                              Card
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+
+                        {!hideSorting && (
+                          <Select
+                            value={sort}
+                            onValueChange={(v) => {
+                              setSort(v);
+                              setPage(1);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-36 text-xs">
+                              <SelectValue placeholder="Latest" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="latest">Latest</SelectItem>
+                              <SelectItem value="popular">Popular</SelectItem>
+                              <SelectItem value="likes">Likes</SelectItem>
+                              <SelectItem value="new_activity">New activity</SelectItem>
+                              <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                              <SelectItem value="oldest">Oldest</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {canCreatePost && (
+                    <Dialog open={newPostOpen} onOpenChange={setNewPostOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="gap-1.5">
+                          <Plus className="h-4 w-4" />
+                          New post
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle>Create a new post</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={handleCreatePost} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="post-title">Title</Label>
+                            <Input
+                              id="post-title"
+                              value={postTitle}
+                              onChange={(e) => setPostTitle(e.target.value)}
+                              placeholder="Post title"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="post-body">Content</Label>
+                            <textarea
+                              id="post-body"
+                              value={postBody}
+                              onChange={(e) => setPostBody(e.target.value)}
+                              placeholder="Write your post..."
+                              className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                              required
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setNewPostOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button type="submit" disabled={creating}>
+                              {creating ? "Creating..." : "Post"}
+                            </Button>
+                          </div>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+
+                {/* Posts list */}
+                {postsLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="rounded-xl border bg-card p-5">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-9 w-9 rounded-full" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-3.5 w-28" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                        </div>
+                        <Skeleton className="mt-4 h-5 w-3/4" />
+                        <Skeleton className="mt-2 h-4 w-full" />
+                        <Skeleton className="mt-1.5 h-4 w-2/3" />
+                      </div>
+                    ))}
+                  </div>
+                ) : isImageSpace ? (
+                  imagePosts.length === 0 ? (
+                    <div className="rounded-xl border bg-card px-6 py-12 text-center">
+                      <p className="text-muted-foreground">
+                        No images have been posted here yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <ImagePostsGrid posts={imagePosts} />
+                      <div className="mt-6 flex items-center justify-center gap-3">
+                        {page > 1 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage((p) => p - 1)}
+                          >
+                            Previous
+                          </Button>
+                        )}
+                        {hasNextPage && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPage((p) => p + 1)}
+                          >
+                            Next
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )
+                ) : posts.length === 0 ? (
+                  <div className="rounded-xl border bg-card px-6 py-12 text-center">
+                    <p className="text-muted-foreground">
+                      No posts in this space yet. Be the first to start a conversation!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {layout === "feed" && (
+                      <>
+                        {/* Pinned posts */}
+                        {pinnedPosts.length > 0 && (
+                          <div className="mb-4 space-y-4">
+                            {pinnedPosts.map((post) => (
+                              <div key={post.id} className="relative">
+                                <div className="absolute -top-2 left-4 z-10 flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                  <Pin className="h-3 w-3" />
+                                  Pinned
+                                </div>
+                                <PostCard
+                                  post={post}
+                                  spaceId={Number(id)}
+                                  showSpaceName={false}
+                                  onLike={handleLike}
+                                  onBookmark={handleBookmark}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Regular posts */}
+                        <div className="space-y-4">
+                          {regularPosts.map((post) => (
+                            <PostCard
+                              key={post.id}
+                              post={post}
+                              spaceId={Number(id)}
+                              showSpaceName={false}
+                              onLike={handleLike}
+                              onBookmark={handleBookmark}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {layout === "list" && (
+                      <div className="rounded-xl border bg-card divide-y">
+                        {regularPosts.map((post) => {
+                          const title = post.display_title || post.name || "Untitled";
+                          const author =
+                            post.community_member?.name ||
+                            post.author?.name ||
+                            post.user_name ||
+                            "Unknown";
+                          const commentCount = post.comment_count ?? post.comments_count ?? 0;
+                          const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
+                          const href = `/spaces/${id}/posts/${post.id}`;
+                          return (
+                            <Link
+                              key={post.id}
+                              href={href}
+                              className="block px-4 py-3 hover:bg-muted/40 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-[15px] font-semibold">
+                                    {title}
+                                  </div>
+                                  <div className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">
+                                    {author}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                                  {likeCount > 0 && <span>{likeCount} likes</span>}
+                                  {commentCount > 0 && (
+                                    <span>{commentCount} comments</span>
+                                  )}
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {layout === "card" && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {regularPosts.map((post) => {
+                          const title = post.display_title || post.name || "Untitled";
+                          const href = `/spaces/${id}/posts/${post.id}`;
+                          const coverImage =
+                            post.cover_image || post.cardview_image || post.cover_image_url;
+                          return (
+                            <Link
+                              key={post.id}
+                              href={href}
+                              className="rounded-xl border bg-card overflow-hidden hover:shadow-sm transition-shadow"
+                            >
+                              {coverImage && (
+                                <div className="aspect-[2.5/1] overflow-hidden bg-muted">
+                                  <img
+                                    src={coverImage}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                              )}
+                              <div className="p-4">
+                                <div className="text-sm font-semibold line-clamp-2">
+                                  {title}
+                                </div>
+                                {post.topics && post.topics.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {post.topics.slice(0, 3).map((t) => (
+                                      <Badge
+                                        key={t.id}
+                                        variant="outline"
+                                        className="text-xs font-normal"
+                                      >
+                                        {t.name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Pagination */}
+                    <div className="mt-6 flex items-center justify-center gap-3">
+                      {page > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage((p) => p - 1)}
+                        >
+                          Previous
+                        </Button>
+                      )}
+                      {hasNextPage && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage((p) => p + 1)}
+                        >
+                          Next
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
+      </div>
+    );
   }
 
   if (!spaceLoading && isEventSpace && space) {
@@ -281,7 +735,7 @@ export default function SpaceDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8">
       {/* Space header */}
       {spaceLoading ? (
         <div className="mb-6">
@@ -355,6 +809,20 @@ export default function SpaceDetailPage() {
               </>
             ) : (
               <>
+                {/* "All" pseudo-topic: shows all posts when no topic filters are selected */}
+                <button
+                  type="button"
+                  onClick={handleClearTopics}
+                  className="shrink-0"
+                >
+                  <Badge
+                    variant={selectedTopics.length === 0 ? "default" : "outline"}
+                    className="h-8 rounded-full px-3 text-xs font-medium"
+                  >
+                    All
+                  </Badge>
+                </button>
+
                 {topics.map((t) => {
                   const active = selectedTopics.includes(t.id);
                   return (
@@ -376,104 +844,95 @@ export default function SpaceDetailPage() {
               </>
             )}
           </div>
-          {topicSelectionBlocked && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              Select a topic to view posts in this space.
-            </div>
-          )}
         </div>
       )}
 
       {/* Toolbar: sort + new post */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Tabs value={layout} onValueChange={(v) => setLayout(v as typeof layout)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="feed" className="text-xs">Feed</TabsTrigger>
-              <TabsTrigger value="list" className="text-xs">List</TabsTrigger>
-              <TabsTrigger value="card" className="text-xs">Card</TabsTrigger>
-            </TabsList>
-          </Tabs>
+      {!isImageSpace && (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Tabs value={layout} onValueChange={(v) => setLayout(v as typeof layout)}>
+              <TabsList className="h-8">
+                <TabsTrigger value="feed" className="text-xs">Feed</TabsTrigger>
+                <TabsTrigger value="list" className="text-xs">List</TabsTrigger>
+                <TabsTrigger value="card" className="text-xs">Card</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {!hideSorting && (
-            <Select
-              value={sort}
-              onValueChange={(v) => {
-                setSort(v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-8 w-36 text-xs">
-                <SelectValue placeholder="Latest" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">Latest</SelectItem>
-                <SelectItem value="popular">Popular</SelectItem>
-                <SelectItem value="likes">Likes</SelectItem>
-                <SelectItem value="new_activity">New activity</SelectItem>
-                <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                <SelectItem value="oldest">Oldest</SelectItem>
-              </SelectContent>
-            </Select>
+            {!hideSorting && (
+              <Select
+                value={sort}
+                onValueChange={(v) => {
+                  setSort(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <SelectValue placeholder="Latest" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="latest">Latest</SelectItem>
+                  <SelectItem value="popular">Popular</SelectItem>
+                  <SelectItem value="likes">Likes</SelectItem>
+                  <SelectItem value="new_activity">New activity</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                  <SelectItem value="oldest">Oldest</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {canCreatePost && (
+            <Dialog open={newPostOpen} onOpenChange={setNewPostOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5">
+                  <Plus className="h-4 w-4" />
+                  New post
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Create a new post</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCreatePost} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="post-title">Title</Label>
+                    <Input
+                      id="post-title"
+                      value={postTitle}
+                      onChange={(e) => setPostTitle(e.target.value)}
+                      placeholder="Post title"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="post-body">Content</Label>
+                    <textarea
+                      id="post-body"
+                      value={postBody}
+                      onChange={(e) => setPostBody(e.target.value)}
+                      placeholder="Write your post..."
+                      className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setNewPostOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={creating}>
+                      {creating ? "Creating..." : "Post"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           )}
         </div>
-
-        {canCreatePost && (
-          <Dialog open={newPostOpen} onOpenChange={setNewPostOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5">
-                <Plus className="h-4 w-4" />
-                New post
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Create a new post</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreatePost} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="post-title">Title</Label>
-                  <Input
-                    id="post-title"
-                    value={postTitle}
-                    onChange={(e) => setPostTitle(e.target.value)}
-                    placeholder="Post title"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="post-body">Content</Label>
-                  <textarea
-                    id="post-body"
-                    value={postBody}
-                    onChange={(e) => setPostBody(e.target.value)}
-                    placeholder="Write your post..."
-                    className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    required
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setNewPostOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={creating}>
-                    {creating ? "Creating..." : "Post"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+      )}
 
       {/* Posts list */}
-      {topicSelectionBlocked ? (
-        <div className="rounded-xl border bg-card px-6 py-12 text-center">
-          <p className="text-muted-foreground">
-            Choose a topic above to see posts in this space.
-          </p>
-        </div>
-      ) : postsLoading ? (
+      {postsLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border bg-card p-5">
@@ -490,6 +949,28 @@ export default function SpaceDetailPage() {
             </div>
           ))}
         </div>
+      ) : isImageSpace ? (
+        imagePosts.length === 0 ? (
+          <div className="rounded-xl border bg-card px-6 py-12 text-center">
+            <p className="text-muted-foreground">No images have been posted here yet.</p>
+          </div>
+        ) : (
+          <>
+            <ImagePostsGrid posts={imagePosts} spaceId={Number(id)} />
+            <div className="mt-6 flex items-center justify-center gap-3">
+              {page > 1 && (
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+              )}
+              {hasNextPage && (
+                <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              )}
+            </div>
+          </>
+        )
       ) : posts.length === 0 ? (
         <div className="rounded-xl border bg-card px-6 py-12 text-center">
           <p className="text-muted-foreground">

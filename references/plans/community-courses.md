@@ -28,7 +28,7 @@
 
 ### Gaps (API capabilities not yet used)
 
-- **Lesson downloads/resources** via `lessons/{lesson_id}/files`
+- **Lesson downloads/resources** via `lessons/{lesson_id}/files` *(Implemented in: `src/app/api/community/courses/[courseId]/lessons/[lessonId]/files/route.ts`, `src/lib/circle/headless-member.ts`, `src/components/community/CourseSpaceView.tsx`)*
 - **Quizzes**
   - listing quiz prompts (as included in lesson payloads or via quiz endpoints)
   - attempt lifecycle (start attempt, submit, review results)
@@ -54,28 +54,28 @@
 
 #### Server routes to add
 
-- `GET /api/community/courses/[courseId]/lessons/[lessonId]/files` → `GET /courses/{course_id}/lessons/{lesson_id}/files`
+- `GET /api/community/courses/[courseId]/lessons/[lessonId]/files` → `GET /courses/{course_id}/lessons/{lesson_id}/files` *(Implemented in: `src/app/api/community/courses/[courseId]/lessons/[lessonId]/files/route.ts`)*
 - Course topics:
-  - `GET /api/community/course-topics` → `GET /course_topics`
+  - `GET /api/community/course-topics` → `GET /course_topics` *(Implemented in: `src/app/api/community/course-topics/route.ts`)*
 - Quiz attempts:
-  - `GET/POST /api/community/courses/[courseId]/quiz-attempts` → `GET/POST /courses/{course_id}/quiz_attempts`
-  - `GET/POST /api/community/quizzes/[quizId]/attempts` → `GET/POST /quizzes/{quiz_id}/attempts`
-  - `GET /api/community/quizzes/[quizId]/attempts/[attemptId]` → `GET /quizzes/{quiz_id}/attempts/{id}`
+  - `GET/POST /api/community/courses/[courseId]/quiz-attempts` → `GET/POST /courses/{course_id}/quiz_attempts` *(Implemented: `GET` in `src/app/api/community/courses/[courseId]/quiz-attempts/route.ts`; note swagger labels this “for admins”.)*
+  - `GET/POST /api/community/quizzes/[quizId]/attempts` → `GET/POST /quizzes/{quiz_id}/attempts` *(Implemented: `POST` in `src/app/api/community/quizzes/[quizId]/attempts/route.ts`)*
+  - `GET /api/community/quizzes/[quizId]/attempts/[attemptId]` → `GET /quizzes/{quiz_id}/attempts/{id}` *(Implemented: `GET` in `src/app/api/community/quizzes/[quizId]/attempts/[attemptId]/route.ts`)*
 
 #### UI work items
 
 - Course catalog:
-  - introduce course topic filters (powered by `course_topics`)
+  - introduce course topic filters (powered by `course_topics`) *(Implemented in: `src/app/community/(main)/courses/page.tsx`; actual filtering requires `course_topics` metadata in `/api/community/spaces` records.)*
 - Lesson view:
-  - show lesson files/resources section
+  - show lesson files/resources section *(Implemented in: `src/components/community/CourseSpaceView.tsx`)*
   - add next/prev lesson navigation (based on sections payload)
 - Quiz:
-  - implement attempt flow and persist progress/answers according to swagger schemas
+  - implement attempt flow and persist progress/answers according to swagger schemas *(Implemented minimal flow in: `src/components/community/CourseSpaceView.tsx` + proxies; quiz UI appears when lesson payload includes `quiz_id` or `quiz.id`.)*
 
 ### Acceptance checklist
 
-- [ ] Lesson files are visible and downloadable from lesson view.
-- [ ] Course topic taxonomy is usable to filter/browse courses.
-- [ ] Quizzes are supported end-to-end with attempts and result viewing.
+- [x] Lesson files are visible and downloadable from lesson view. *(Implemented in: `src/components/community/CourseSpaceView.tsx` + proxy route.)*
+- [~] Course topic taxonomy is usable to filter/browse courses. *(Partially: topics load + selectable in `src/app/community/(main)/courses/page.tsx`; full filtering depends on spaces response including topic metadata.)*
+- [~] Quizzes are supported end-to-end with attempts and result viewing. *(Partially: start + submit attempt via `POST /api/community/quizzes/[quizId]/attempts`, results render; requires lesson payload exposing a quiz id.)*
 - [ ] Progress updates remain optimistic and resilient to token refresh.
 

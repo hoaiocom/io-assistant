@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { BookOpen, Lock, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -21,7 +22,12 @@ interface CourseSpace {
   is_private: boolean;
   is_member?: boolean;
   members_count?: number;
+  course_topics?: Array<{ id: number; name: string }>;
 }
+
+type CourseTopicsResponse = {
+  records?: Array<{ id: number; name: string; admin_only?: boolean }>;
+};
 
 function getCoverUrl(space: CourseSpace): string | null {
   const raw = space.cover_image_url || null;
@@ -64,17 +70,43 @@ function CourseCover({ src, alt }: { src: string | null; alt: string }) {
 
 export default function CoursesPage() {
   const [tab, setTab] = useState<"all" | "my">("all");
+  const [selectedTopics, setSelectedTopics] = useState<number[]>([]);
 
   const { data, isLoading } = useSWR("/api/community/spaces", fetcher, {
     revalidateOnFocus: false,
   });
 
+  const { data: topicsData } = useSWR<CourseTopicsResponse>(
+    "/api/community/course-topics?per_page=200",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5 * 60_000 },
+  );
+
+  const topics = topicsData?.records || [];
+
   const allCourses: CourseSpace[] = (
     Array.isArray(data) ? data : data?.records || []
   ).filter((s: { space_type: string }) => s.space_type === "course");
 
-  const courses =
-    tab === "my" ? allCourses.filter((c) => c.is_member) : allCourses;
+  const courses = useMemo(() => {
+    const base = tab === "my" ? allCourses.filter((c) => c.is_member) : allCourses;
+    if (!selectedTopics.length) return base;
+    return base.filter((c) => {
+      const ids = (c.course_topics || []).map((t) => t.id);
+      if (!ids.length) return false;
+      return selectedTopics.every((id) => ids.includes(id));
+    });
+  }, [allCourses, selectedTopics, tab]);
+
+  const toggleTopic = (topicId: number) => {
+    setSelectedTopics((prev) =>
+      prev.includes(topicId) ? prev.filter((t) => t !== topicId) : [...prev, topicId],
+    );
+  };
+
+  const topicsAvailableOnCourses = allCourses.some(
+    (c) => Array.isArray(c.course_topics) && c.course_topics.length > 0,
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
@@ -107,6 +139,48 @@ export default function CoursesPage() {
           My courses
         </button>
       </div>
+
+      {topics.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium">Topics</div>
+            {selectedTopics.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedTopics([])}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {topics.map((t) => {
+              const active = selectedTopics.includes(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => toggleTopic(t.id)}
+                  className="shrink-0"
+                >
+                  <Badge
+                    variant={active ? "default" : "outline"}
+                    className="h-8 rounded-full px-3 text-xs font-medium"
+                  >
+                    {t.name}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+          {selectedTopics.length > 0 && !topicsAvailableOnCourses && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Topic filtering depends on courses including topic metadata in the spaces response.
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">

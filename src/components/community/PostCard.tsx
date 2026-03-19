@@ -184,10 +184,10 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap text-[13px] sm:text-sm">
               <Link
                 href={authorId ? `/members/${authorId}` : "#"}
-                className="text-sm font-semibold hover:underline"
+                className="font-semibold hover:underline"
               >
                 {authorName}
               </Link>
@@ -209,12 +209,12 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
               )}
             </div>
             {authorHeadline && (
-              <p className="text-xs text-muted-foreground truncate">{authorHeadline}</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">{authorHeadline}</p>
             )}
             {showSpaceName && resolvedSpaceName && sid && (
               <Link
                 href={`/spaces/${sid}`}
-                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                className="text-[11px] sm:text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
                 {resolvedSpaceName}
               </Link>
@@ -225,12 +225,12 @@ export function PostCard({ post, spaceId, showSpaceName = true, onLike, onBookma
         {/* Title + body excerpt */}
         <Link href={postHref} className="mt-3 block">
           {title && (
-            <h3 className="text-base font-semibold leading-snug hover:text-primary">
+            <h3 className="text-xl sm:text-2xl font-semibold leading-snug hover:text-primary">
               {title}
             </h3>
           )}
           {excerpt && (
-            <p className="mt-1.5 line-clamp-4 text-sm text-muted-foreground leading-relaxed">
+            <p className="mt-1.5 line-clamp-3 text-[13px] sm:text-sm text-muted-foreground leading-relaxed">
               {excerpt}
             </p>
           )}
