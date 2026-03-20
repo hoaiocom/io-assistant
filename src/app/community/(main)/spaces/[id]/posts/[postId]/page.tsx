@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import { formatDistanceToNow, format } from "date-fns";
 import {
   Heart,
@@ -19,6 +20,7 @@ import {
   Video,
   Monitor,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +83,17 @@ function isMod(roles: unknown): boolean {
   if (roles && typeof roles === "object" && "moderator" in roles)
     return !!(roles as { moderator: boolean }).moderator;
   return false;
+}
+
+function normalizeCommentHtmlForImages(html: string): string {
+  // Tiptap can emit inline centering for images (e.g. margin-left/right:auto).
+  // We normalize that for comment/reply thumbnails to always appear left-aligned.
+  return html
+    .replace(/margin-left:\s*auto;/gi, "margin-left:0;")
+    .replace(/margin-right:\s*auto;/gi, "margin-right:0;")
+    .replace(/margin:\s*0\s+auto;/gi, "margin:0 0;")
+    .replace(/text-align:\s*center/gi, "text-align:left")
+    .replace(/justify-content:\s*center/gi, "justify-content:flex-start");
 }
 
 function toIcsDate(d: Date) {
@@ -223,14 +236,14 @@ function CommentItem({
   comment,
   postId,
   depth,
+  parentCommentId,
   onMutate,
-  onLoadMoreReplies,
 }: {
   comment: CommentData;
   postId: string;
   depth: number;
+  parentCommentId?: number;
   onMutate: () => void;
-  onLoadMoreReplies?: () => void;
 }) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -239,6 +252,10 @@ function CommentItem({
   const [likeCount, setLikeCount] = useState(comment.user_likes_count ?? 0);
   const [expanded, setExpanded] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
+  const [replyPage, setReplyPage] = useState(0);
+  const [loadingMoreReplies, setLoadingMoreReplies] = useState(false);
+  const [hasMoreReplyPages, setHasMoreReplyPages] = useState(false);
+  const [loadedReplies, setLoadedReplies] = useState<CommentData[] | null>(null);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const [imageLightboxSrc, setImageLightboxSrc] = useState<string | null>(null);
 
@@ -257,15 +274,22 @@ function CommentItem({
     body_plain_text: comment.body_plain_text || comment.body_text,
   });
 
+  const safeCHtml = normalizeCommentHtmlForImages(cHtml || "");
   const contentText = cText || "";
   const isLong = contentText.length > 300;
-  const replies = comment.replies || [];
+  const replies = loadedReplies ?? comment.replies ?? [];
   const totalReplies =
     typeof comment.replies_count === "number"
       ? comment.replies_count
       : replies.length;
-  const canShowMoreReplies =
-    !!onLoadMoreReplies && totalReplies > replies.length;
+  const canShowMoreReplies = totalReplies > replies.length || hasMoreReplyPages;
+
+  useEffect(() => {
+    setReplyPage(0);
+    setHasMoreReplyPages(false);
+    setLoadedReplies(null);
+  }, [comment.id, comment.replies_count, (comment.replies || []).length]);
+  const canDelete = comment.policies?.can_destroy === true;
 
   async function handleLikeComment() {
     const wasLiked = liked;
@@ -303,6 +327,63 @@ function CommentItem({
       toast.error("Failed to post reply");
     } finally {
       setReplying(false);
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      let res: Response;
+      if (depth > 0 && parentCommentId) {
+        res = await fetch(
+          `/api/community/comments/${parentCommentId}/replies/${comment.id}`,
+          { method: "DELETE" },
+        );
+      } else {
+        res = await fetch(`/api/community/posts/${postId}/comments/${comment.id}`, {
+          method: "DELETE",
+        });
+      }
+      if (!res.ok) throw new Error("Failed");
+      onMutate();
+      toast.success(depth > 0 ? "Reply deleted" : "Comment deleted");
+    } catch {
+      toast.error("Failed to delete");
+    }
+  }
+
+  async function handleLoadMoreReplies() {
+    if (loadingMoreReplies) return;
+    setLoadingMoreReplies(true);
+    try {
+      const nextPage = replyPage + 1;
+      const res = await fetch(
+        `/api/community/comments/${comment.id}/replies?page=${nextPage}&per_page=10`,
+      );
+      if (!res.ok) throw new Error("Failed");
+      const data = (await res.json()) as {
+        records?: CommentData[];
+        has_next_page?: boolean;
+      };
+      const incoming = Array.isArray(data.records) ? data.records : [];
+      setLoadedReplies((prev) => {
+        const base = prev ?? (comment.replies || []);
+        const merged = [...base];
+        const seen = new Set(merged.map((r) => r.id));
+        for (const item of incoming) {
+          if (!seen.has(item.id)) {
+            merged.push(item);
+            seen.add(item.id);
+          }
+        }
+        return merged;
+      });
+      setReplyPage(nextPage);
+      setHasMoreReplyPages(Boolean(data.has_next_page));
+      setShowReplies(true);
+    } catch {
+      toast.error("Failed to load more replies");
+    } finally {
+      setLoadingMoreReplies(false);
     }
   }
 
@@ -375,13 +456,28 @@ function CommentItem({
                   </p>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground -mt-0.5"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
+              {canDelete ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground -mt-0.5"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
 
             {/* Comment body */}
@@ -390,10 +486,10 @@ function CommentItem({
                 <div className="relative">
                   <div
                     className={cn(
-                      "comment-body [&_img]:block [&_img]:max-w-[50%] [&_img]:max-w-sm [&_img]:max-h-48 [&_img]:h-auto [&_img]:cursor-zoom-in [&_img]:object-contain [&_img]:ml-0 [&_img]:mr-auto",
+                      "comment-body [&_img]:block [&_img]:h-28 [&_img]:w-28 [&_img]:max-w-none [&_img]:rounded-md [&_img]:border [&_img]:object-cover [&_img]:cursor-zoom-in [&_img]:ml-0 [&_img]:mr-auto [&_img]:my-1",
                       isLong && !expanded && "max-h-[120px] overflow-hidden",
                     )}
-                    dangerouslySetInnerHTML={{ __html: cHtml }}
+                    dangerouslySetInnerHTML={{ __html: safeCHtml }}
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
                       if (target && target.tagName === "IMG") {
@@ -536,6 +632,7 @@ function CommentItem({
               comment={reply}
               postId={postId}
               depth={depth + 1}
+              parentCommentId={comment.id}
               onMutate={onMutate}
             />
           ))}
@@ -551,10 +648,11 @@ function CommentItem({
           {showReplies && canShowMoreReplies && (
             <button
               type="button"
-              onClick={onLoadMoreReplies}
+              onClick={handleLoadMoreReplies}
+              disabled={loadingMoreReplies}
               className="ml-12 mb-2 text-xs font-medium text-primary hover:underline"
             >
-              Show more replies
+              {loadingMoreReplies ? "Loading..." : "Show more replies"}
             </button>
           )}
         </div>
@@ -569,7 +667,6 @@ export default function PostDetailPage() {
   const { id: spaceId, postId } = useParams<{ id: string; postId: string }>();
   const [commentBody, setCommentBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [commentPage, setCommentPage] = useState(1);
   const [attendeesOpen, setAttendeesOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
@@ -583,18 +680,35 @@ export default function PostDetailPage() {
     { revalidateOnFocus: false },
   );
 
+  const commentsKey = (
+    pageIndex: number,
+    previousPageData?: { has_next_page?: boolean },
+  ) => {
+    if (previousPageData && previousPageData.has_next_page === false) return null;
+    return `/api/community/posts/${postId}/comments?page=${pageIndex + 1}&per_page=50`;
+  };
   const {
-    data: commentsData,
+    data: commentsPages,
     isLoading: commentsLoading,
     mutate: mutateComments,
-  } = useSWR(
-    `/api/community/posts/${postId}/comments?page=${commentPage}&per_page=50`,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
+    size: commentsPageCount,
+    setSize: setCommentsPageCount,
+  } = useSWRInfinite(commentsKey, fetcher, {
+    revalidateOnFocus: false,
+    keepPreviousData: true,
+  });
 
-  const comments: CommentData[] = commentsData?.records || [];
-  const hasMoreComments = commentsData?.has_next_page || false;
+  const comments: CommentData[] =
+    commentsPages?.flatMap((page) =>
+      Array.isArray((page as { records?: unknown[] })?.records)
+        ? ((page as { records: CommentData[] }).records ?? [])
+        : [],
+    ) ?? [];
+  const hasMoreComments =
+    (commentsPages?.length
+      ? !!(commentsPages[commentsPages.length - 1] as { has_next_page?: boolean })
+          ?.has_next_page
+      : false) ?? false;
 
   const handleLike = useCallback(async () => {
     if (!post) return;
@@ -690,6 +804,9 @@ export default function PostDetailPage() {
     }).gallery?.images || [];
   const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
   const commentCount = post.comment_count ?? post.comments_count ?? 0;
+  const postFollowerId = (post as { post_follower_id?: number | null }).post_follower_id ?? null;
+  const isFollowingPost = !!postFollowerId;
+  const postFollowersCount = post.post_followers_count ?? post.followers_count ?? 0;
   const dateStr = formatDate(post.published_at || post.created_at);
   const { html: bodyHtml, plainText: bodyText } = resolveBodyHtml({
     tiptap_body: post.tiptap_body,
@@ -746,6 +863,45 @@ export default function PostDetailPage() {
       toast.success("RSVP confirmed!");
     } catch {
       toast.error("Failed to RSVP");
+    }
+  }
+
+  async function handleFollowPost() {
+    const previousPost = post;
+    mutatePost(
+      (current: any) => {
+        if (!current) return current;
+        const currentlyFollowing = !!current.post_follower_id;
+        const nextCount = Math.max(
+          0,
+          Number(current.post_followers_count ?? current.followers_count ?? 0) +
+            (currentlyFollowing ? -1 : 1),
+        );
+        return {
+          ...current,
+          post_follower_id: currentlyFollowing ? null : -1,
+          post_followers_count: nextCount,
+        };
+      },
+      false,
+    );
+
+    try {
+      let res: Response;
+      if (previousPost?.post_follower_id) {
+        res = await fetch(
+          `/api/community/posts/${postId}/followers/${previousPost.post_follower_id}`,
+          { method: "DELETE" },
+        );
+      } else {
+        res = await fetch(`/api/community/posts/${postId}/followers`, { method: "POST" });
+      }
+      if (!res.ok) throw new Error("Failed");
+      mutatePost();
+      toast.success(previousPost?.post_follower_id ? "Unfollowed post" : "Following post");
+    } catch {
+      mutatePost(previousPost, false);
+      toast.error("Failed to update follow");
     }
   }
 
@@ -853,6 +1009,14 @@ export default function PostDetailPage() {
                   </h1>
                   <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
                     <Button
+                      variant={isFollowingPost ? "secondary" : "outline"}
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={handleFollowPost}
+                    >
+                      {isFollowingPost ? "Following" : "Follow"}
+                    </Button>
+                    <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -882,6 +1046,11 @@ export default function PostDetailPage() {
                     </Button>
                   </div>
                 </div>
+              )}
+              {postFollowersCount > 0 && (
+                <p className="mb-4 text-xs text-muted-foreground">
+                  {postFollowersCount} follower{postFollowersCount === 1 ? "" : "s"}
+                </p>
               )}
 
               {/* Author row */}
@@ -1105,12 +1274,8 @@ export default function PostDetailPage() {
                       comment={comment}
                       postId={postId}
                       depth={0}
+                      parentCommentId={undefined}
                       onMutate={handleMutateComments}
-                      onLoadMoreReplies={
-                        hasMoreComments
-                          ? () => setCommentPage((p) => p + 1)
-                          : undefined
-                      }
                     />
                   ))}
                 </div>
@@ -1125,7 +1290,7 @@ export default function PostDetailPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setCommentPage((p) => p + 1)}
+                    onClick={() => setCommentsPageCount((p) => p + 1)}
                     className="text-muted-foreground"
                   >
                     Load more comments

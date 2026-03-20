@@ -127,10 +127,12 @@ export function createMemberPost(
 export function getPostComments(
   token: string,
   postId: number,
-  params?: { page?: number; per_page?: number; sort?: string },
+  params?: { page?: number; per_page?: number; sort?: string; parent_comment_id?: number },
 ) {
   const query = new URLSearchParams(
-    Object.entries(params || {}).map(([k, v]) => [k, String(v)]),
+    Object.entries(params || {})
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => [k, String(v)]),
   ).toString();
   return memberRequest<unknown>(`posts/${postId}/comments${query ? `?${query}` : ""}`, token);
 }
@@ -167,9 +169,24 @@ export function deleteBookmark(token: string, bookmarkId: number) {
 }
 
 // Notifications
-export function getNotifications(token: string, params?: { page?: number; per_page?: number }) {
-  const query = params ? `?page=${params.page || 1}&per_page=${params.per_page || 20}` : "";
-  return memberRequest<unknown>(`notifications${query}`, token);
+export function getNotifications(
+  token: string,
+  params?: {
+    page?: number;
+    per_page?: number;
+    sort?: "oldest" | "latest";
+    status?: "all" | "read" | "unread";
+    notification_type?: string;
+  },
+) {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.set("page", String(params.page));
+  if (params?.per_page) queryParams.set("per_page", String(params.per_page));
+  if (params?.sort) queryParams.set("sort", params.sort);
+  if (params?.status) queryParams.set("status", params.status);
+  if (params?.notification_type) queryParams.set("notification_type", params.notification_type);
+  const query = queryParams.toString();
+  return memberRequest<unknown>(`notifications${query ? `?${query}` : ""}`, token);
 }
 
 export function markNotificationRead(token: string, notificationId: number) {
@@ -178,14 +195,30 @@ export function markNotificationRead(token: string, notificationId: number) {
   });
 }
 
-export function markAllNotificationsRead(token: string) {
+export function markAllNotificationsRead(
+  token: string,
+  params?: { notification_type?: string },
+) {
   return memberRequest<unknown>("notifications/mark_all_as_read", token, {
     method: "POST",
+    body: JSON.stringify(params || {}),
   });
 }
 
 export function getNewNotificationsCount(token: string) {
   return memberRequest<unknown>("notifications/new_notifications_count", token);
+}
+
+export function resetNewNotificationsCount(token: string) {
+  return memberRequest<unknown>("notifications/reset_new_notifications_count", token, {
+    method: "POST",
+  });
+}
+
+export function archiveNotification(token: string, notificationId: number) {
+  return memberRequest<unknown>(`notifications/${notificationId}/archive`, token, {
+    method: "POST",
+  });
 }
 
 // Community Members (directory)
@@ -594,6 +627,37 @@ export function unlikePost(token: string, postId: number) {
   return memberRequest<unknown>(`posts/${postId}/user_likes`, token, { method: "DELETE" });
 }
 
+// Post followers
+export function getPostFollowers(
+  token: string,
+  postId: number,
+  params?: { page?: number; per_page?: number },
+) {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.per_page) query.set("per_page", String(params.per_page));
+  const qs = query.toString();
+  return memberRequest<unknown>(`posts/${postId}/post_followers${qs ? `?${qs}` : ""}`, token);
+}
+
+export function followPost(token: string, postId: number) {
+  return memberRequest<unknown>(`posts/${postId}/post_followers`, token, { method: "POST" });
+}
+
+export function unfollowPost(token: string, postId: number) {
+  return memberRequest<unknown>(`posts/${postId}/post_followers`, token, { method: "DELETE" });
+}
+
+export function unfollowPostByFollowerId(
+  token: string,
+  postId: number,
+  followerId: number,
+) {
+  return memberRequest<unknown>(`posts/${postId}/post_followers/${followerId}`, token, {
+    method: "DELETE",
+  });
+}
+
 // Comment likes
 export function likeComment(token: string, commentId: number) {
   return memberRequest<unknown>(`comments/${commentId}/user_likes`, token, { method: "POST" });
@@ -613,6 +677,22 @@ export function createReply(
     method: "POST",
     body: JSON.stringify({ reply: data }),
   });
+}
+
+export function getCommentReplies(
+  token: string,
+  commentId: number,
+  params?: { page?: number; per_page?: number; sort?: string },
+) {
+  const query = new URLSearchParams(
+    Object.entries(params || {})
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return memberRequest<unknown>(
+    `comments/${commentId}/replies${query ? `?${query}` : ""}`,
+    token,
+  );
 }
 
 // Delete comment

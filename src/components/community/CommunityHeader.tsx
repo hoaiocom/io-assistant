@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
+import { formatDistanceToNow } from "date-fns";
 import {
   Search,
   Bell,
@@ -13,6 +14,7 @@ import {
   Loader2,
   User,
   Bookmark,
+  CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/use-debounce";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -46,9 +49,14 @@ interface CommunityHeaderProps {
 export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { mutate: mutateGlobal } = useSWRConfig();
   const [loggingOut, setLoggingOut] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationTab, setNotificationTab] = useState<
+    "inbox" | "mentions" | "following" | "all" | "archived"
+  >("inbox");
   const debouncedSearch = useDebounce(searchQuery, 250);
 
   const { data: profile } = useSWR("/api/community/profile", fetcher, {
@@ -64,6 +72,46 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
     (notifCount?.new_notifications_count || 0) +
     (notifCount?.new_mentions_count || 0);
 
+  type NotificationItem = {
+    id: number;
+    created_at: string;
+    read_at: string | null;
+    actor_name?: string;
+    actor_image?: string | null;
+    display_action?: string;
+    action?: string;
+    notifiable_title?: string;
+    action_web_url?: string;
+    notification_text_structure?: string[];
+    notifiable_type?: string;
+  };
+
+  const { data: notificationsData, mutate: mutateNotifications } = useSWR(
+    notificationsOpen
+      ? `/api/community/notifications?page=1&per_page=15&notification_type=${notificationTab}`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 8000 },
+  );
+
+  const notifications: NotificationItem[] = notificationsData?.records || [];
+
+  function isMentionNotification(notification: NotificationItem) {
+    const actionText = `${notification.display_action || ""} ${notification.action || ""}`.toLowerCase();
+    const structure = (notification.notification_text_structure || []).join(" ").toLowerCase();
+    const title = (notification.notifiable_title || "").toLowerCase();
+    return (
+      actionText.includes("mention") ||
+      structure.includes("mention") ||
+      title.includes("@")
+    );
+  }
+
+  const visibleNotifications =
+    notificationTab === "mentions"
+      ? notifications.filter(isMentionNotification)
+      : notifications;
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -73,6 +121,61 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
     } catch {
       setLoggingOut(false);
     }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    try {
+      const body =
+        notificationTab === "all" ? {} : { notification_type: notificationTab };
+      await fetch("/api/community/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      await fetch("/api/community/notifications/reset-count", { method: "POST" });
+      mutateNotifications();
+      mutateGlobal("/api/community/notifications?count=true");
+    } catch {
+      // silent
+    }
+  }
+
+  async function handleNotificationClick(notification: NotificationItem) {
+    if (!notification.read_at) {
+      mutateNotifications(
+        (current) => {
+          if (!current?.records) return current;
+          return {
+            ...current,
+            records: current.records.map((n: NotificationItem) =>
+              n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n,
+            ),
+          };
+        },
+        { revalidate: false },
+      );
+      try {
+        await fetch(`/api/community/notifications/${notification.id}/read`, {
+          method: "POST",
+        });
+        await fetch("/api/community/notifications/reset-count", { method: "POST" });
+        mutateGlobal("/api/community/notifications?count=true");
+      } catch {
+        mutateNotifications();
+      }
+    }
+
+    setNotificationsOpen(false);
+    const target = notification.action_web_url;
+    if (target && /^https?:\/\//.test(target)) {
+      window.open(target, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (target) {
+      router.push(target);
+      return;
+    }
+    router.push("/notifications");
   }
 
   function handleSearch(e: React.FormEvent) {
@@ -263,20 +366,146 @@ export function CommunityHeader({ onMenuClick }: CommunityHeaderProps) {
           </Button>
         )}
 
-        <Link href="/notifications">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative shrink-0 text-muted-foreground"
-          >
-            <Bell className="h-4.5 w-4.5" />
-            {totalNotifs > 0 && (
-              <Badge className="absolute -right-0.5 -top-0.5 h-4.5 min-w-4.5 rounded-full px-1 text-[10px] font-semibold">
-                {totalNotifs > 99 ? "99+" : totalNotifs}
-              </Badge>
-            )}
-          </Button>
-        </Link>
+        <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative shrink-0 text-muted-foreground"
+              aria-label="Open notifications"
+            >
+              <Bell className="h-4.5 w-4.5" />
+              {totalNotifs > 0 && (
+                <Badge className="absolute -right-0.5 -top-0.5 h-4.5 min-w-4.5 rounded-full px-1 text-[10px] font-semibold">
+                  {totalNotifs > 99 ? "99+" : totalNotifs}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[420px] p-0">
+            <div className="border-b px-4 py-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Notifications</h3>
+                {visibleNotifications.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 text-muted-foreground"
+                    onClick={handleMarkAllNotificationsRead}
+                  >
+                    <CheckCheck className="h-4 w-4" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+              <div className="mt-3 flex items-center gap-4 overflow-x-auto text-sm">
+                {[
+                  { id: "inbox", label: "Inbox", count: notifCount?.new_inbox_count || 0 },
+                  {
+                    id: "mentions",
+                    label: "Mentions",
+                    count: notifCount?.new_mentions_count || 0,
+                  },
+                  { id: "following", label: "Following", count: 0 },
+                  { id: "all", label: "All", count: null },
+                  { id: "archived", label: "Archived", count: null },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={cn(
+                      "whitespace-nowrap border-b-2 pb-1.5 transition-colors",
+                      notificationTab === tab.id
+                        ? "border-foreground font-semibold text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() =>
+                      setNotificationTab(
+                        tab.id as "inbox" | "mentions" | "following" | "all" | "archived",
+                      )
+                    }
+                  >
+                    {tab.label}
+                    {typeof tab.count === "number" && tab.count > 0 ? (
+                      <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[11px]">
+                        {tab.count}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="max-h-[520px] overflow-auto">
+              {!notificationsData ? (
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  Loading notifications...
+                </div>
+              ) : visibleNotifications.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {notificationTab === "mentions"
+                    ? "No mentions yet."
+                    : "No notifications yet."}
+                </div>
+              ) : (
+                <div>
+                  {visibleNotifications.map((notif) => {
+                    const isUnread = !notif.read_at;
+                    return (
+                      <button
+                        key={notif.id}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/50",
+                          isUnread && "bg-primary/[0.03]",
+                        )}
+                        onClick={() => handleNotificationClick(notif)}
+                      >
+                        <Avatar className="mt-0.5 h-9 w-9 shrink-0">
+                          <AvatarImage src={notif.actor_image || undefined} />
+                          <AvatarFallback>
+                            {(notif.actor_name || "?")
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 text-sm leading-snug">
+                            <span className="font-semibold">{notif.actor_name || "Someone"}</span>{" "}
+                            <span className="text-muted-foreground">
+                              {notif.display_action || notif.action || "interacted with"}
+                            </span>{" "}
+                            {notif.notifiable_title ? (
+                              <span className="font-medium">{notif.notifiable_title}</span>
+                            ) : null}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(notif.created_at), { addSuffix: true })}
+                          </p>
+                        </div>
+                        {isUnread && <span className="mt-2 h-2 w-2 rounded-full bg-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="border-t p-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-center text-sm"
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  router.push("/notifications");
+                }}
+              >
+                View all notifications
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -72,8 +72,12 @@
 
 ### Acceptance checklist
 
-- [ ] Notification archive is supported (API + UI).
-- [ ] “Reset new notifications count” is called at appropriate times to keep badge accurate.
-- [ ] Notification preferences UI exists and persists changes.
-- [ ] Links behave correctly (internal when possible, external fallback).
+- [x] Notification archive is supported (API + UI).  
+  Implemented in: `src/lib/circle/headless-member.ts`, `src/app/api/community/notifications/[id]/archive/route.ts`, `src/app/community/(main)/notifications/page.tsx`
+- [x] “Reset new notifications count” is called at appropriate times to keep badge accurate.  
+  Implemented in: `src/lib/circle/headless-member.ts`, `src/app/api/community/notifications/reset-count/route.ts`, `src/app/community/(main)/notifications/page.tsx`
+- [ ] Notification preferences UI exists and persists changes.  
+  Pending: preference proxy routes and settings UI are not implemented yet (`/community/settings/notifications` still missing).
+- [ ] Links behave correctly (internal when possible, external fallback).  
+  Pending: notifications page still renders text rows and does not yet route by entity type or `action_web_url`.
 

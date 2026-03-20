@@ -81,24 +81,36 @@ Feed, space post lists, post detail pages, bookmarking, likes, and comment threa
 
 #### Server routes to add
 
-- `GET /api/community/posts/[postId]/followers`
-- `POST /api/community/posts/[postId]/followers`
-- `DELETE /api/community/posts/[postId]/followers/[followerId]`
-- `GET /api/community/spaces/[id]/images/posts`
-- `PUT /api/community/spaces/[id]/images/posts/[imagePostId]`
+- [x] `GET /api/community/posts/[postId]/followers`  
+  Implemented in: `src/app/api/community/posts/[postId]/followers/route.ts` and `src/lib/circle/headless-member.ts` (`getPostFollowers`).
+- [x] `POST /api/community/posts/[postId]/followers`  
+  Implemented in: `src/app/api/community/posts/[postId]/followers/route.ts` and `src/lib/circle/headless-member.ts` (`followPost`).
+- [x] `DELETE /api/community/posts/[postId]/followers/[followerId]`  
+  Implemented in: `src/app/api/community/posts/[postId]/followers/[followerId]/route.ts` and `src/lib/circle/headless-member.ts` (`unfollowPostByFollowerId`).
+- [ ] `GET /api/community/spaces/[id]/images/posts`  
+  Pending: not implemented in this slice; image-space feed was deferred to keep this change shippable and focused on post followers + comment/reply deletion.
+- [ ] `PUT /api/community/spaces/[id]/images/posts/[imagePostId]`  
+  Pending: depends on image-space UI flow and edit affordances that are not part of this slice.
 
 #### UI work items
 
 - Post detail:
-  - add follow/unfollow toggle and show follower count
-  - wire comment/reply deletion UI (policy-gated)
+  - [x] add follow/unfollow toggle and show follower count  
+    Implemented in: `src/app/community/(main)/spaces/[id]/posts/[postId]/page.tsx` (optimistic toggle + follower count on post detail).
+  - [x] wire comment/reply deletion UI (policy-gated)  
+    Implemented in: `src/app/community/(main)/spaces/[id]/posts/[postId]/page.tsx`, `src/app/api/community/posts/[postId]/comments/[id]/route.ts`, and `src/app/api/community/comments/[commentId]/replies/[id]/route.ts`.
 - Space detail:
-  - if `space_type === "image"` (or payload indicates image space), render image feed using images posts endpoints
+  - [ ] if `space_type === "image"` (or payload indicates image space), render image feed using images posts endpoints  
+    Pending: separate slice needed (new proxy routes + image feed rendering strategy in space page).
 
 ### Acceptance checklist
 
-- [ ] Post follow/unfollow supported (API + UI + optimistic updates).
-- [ ] Comment/reply deletion supported (policy-gated).
-- [ ] Image spaces render using images-posts endpoints and feel native.
-- [ ] All new features go through server proxy routes; no tokens in client.
+- [x] Post follow/unfollow supported (API + UI + optimistic updates).  
+  Implemented in: `src/lib/circle/headless-member.ts`, `src/app/api/community/posts/[postId]/followers/route.ts`, `src/app/api/community/posts/[postId]/followers/[followerId]/route.ts`, `src/app/community/(main)/spaces/[id]/posts/[postId]/page.tsx`.
+- [x] Comment/reply deletion supported (policy-gated).  
+  Implemented in: `src/lib/circle/headless-member.ts`, `src/app/api/community/posts/[postId]/comments/[id]/route.ts`, `src/app/api/community/comments/[commentId]/replies/[id]/route.ts`, `src/app/community/(main)/spaces/[id]/posts/[postId]/page.tsx`.
+- [ ] Image spaces render using images-posts endpoints and feel native.  
+  Pending: not included in this implementation slice.
+- [x] All new features go through server proxy routes; no tokens in client.  
+  Implemented in: new `/api/community/**` routes above; UI calls only internal API endpoints.
 

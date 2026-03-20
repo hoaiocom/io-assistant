@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireMemberAuth } from "@/lib/member-auth";
-import { getPostComments, createMemberComment } from "@/lib/circle/headless-member";
+import { getPostFollowers, followPost, unfollowPost } from "@/lib/circle/headless-member";
 
 export async function GET(
   req: NextRequest,
@@ -12,18 +12,10 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const page = Number(searchParams.get("page")) || 1;
     const per_page = Number(searchParams.get("per_page")) || 20;
-    const sort = searchParams.get("sort") || undefined;
-    const parent_comment_id = searchParams.get("parent_comment_id");
-
-    const data = await getPostComments(session.accessToken, Number(postId), {
-      page,
-      per_page,
-      sort,
-      parent_comment_id: parent_comment_id ? Number(parent_comment_id) : undefined,
-    });
+    const data = await getPostFollowers(session.accessToken, Number(postId), { page, per_page });
     return NextResponse.json(data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch comments";
+    const message = error instanceof Error ? error.message : "Failed to fetch post followers";
     if (message === "Unauthorized" || message === "Session expired") {
       return NextResponse.json({ error: message }, { status: 401 });
     }
@@ -32,17 +24,34 @@ export async function GET(
 }
 
 export async function POST(
-  req: NextRequest,
+  _req: Request,
   { params }: { params: Promise<{ postId: string }> },
 ) {
   try {
     const session = await requireMemberAuth();
     const { postId } = await params;
-    const body = await req.json();
-    const data = await createMemberComment(session.accessToken, Number(postId), body);
+    const data = await followPost(session.accessToken, Number(postId));
     return NextResponse.json(data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create comment";
+    const message = error instanceof Error ? error.message : "Failed to follow post";
+    if (message === "Unauthorized" || message === "Session expired") {
+      return NextResponse.json({ error: message }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ postId: string }> },
+) {
+  try {
+    const session = await requireMemberAuth();
+    const { postId } = await params;
+    const data = await unfollowPost(session.accessToken, Number(postId));
+    return NextResponse.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to unfollow post";
     if (message === "Unauthorized" || message === "Session expired") {
       return NextResponse.json({ error: message }, { status: 401 });
     }

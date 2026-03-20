@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useEffect, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import { formatDistanceToNow } from "date-fns";
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Archive, Bell, CheckCheck } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,8 @@ interface NotificationItem {
 
 export default function NotificationsPage() {
   const [page, setPage] = useState(1);
+  const [hasResetCount, setHasResetCount] = useState(false);
+  const { mutate: mutateGlobal } = useSWRConfig();
   const { data, isLoading, mutate } = useSWR(
     `/api/community/notifications?page=${page}&per_page=30`,
     fetcher,
@@ -37,10 +39,26 @@ export default function NotificationsPage() {
   const notifications: NotificationItem[] = data?.records || [];
   const hasNextPage = data?.has_next_page || false;
 
+  useEffect(() => {
+    async function resetBadgeCount() {
+      if (isLoading || hasResetCount || page !== 1) return;
+      setHasResetCount(true);
+      try {
+        await fetch("/api/community/notifications/reset-count", { method: "POST" });
+        mutateGlobal("/api/community/notifications?count=true");
+      } catch {
+        // silent
+      }
+    }
+    resetBadgeCount();
+  }, [hasResetCount, isLoading, mutateGlobal, page]);
+
   async function handleMarkAllRead() {
     try {
       await fetch("/api/community/notifications", { method: "POST" });
       mutate();
+      await fetch("/api/community/notifications/reset-count", { method: "POST" });
+      mutateGlobal("/api/community/notifications?count=true");
       toast.success("All notifications marked as read");
     } catch {
       toast.error("Failed to mark notifications as read");
@@ -48,11 +66,50 @@ export default function NotificationsPage() {
   }
 
   async function handleMarkRead(id: number) {
+    const previousData = data;
+    mutate(
+      (current) => {
+        if (!current?.records) return current;
+        return {
+          ...current,
+          records: current.records.map((n: NotificationItem) =>
+            n.id === id ? { ...n, read_at: n.read_at || new Date().toISOString() } : n,
+          ),
+        };
+      },
+      { revalidate: false },
+    );
     try {
       await fetch(`/api/community/notifications/${id}/read`, { method: "POST" });
       mutate();
+      await fetch("/api/community/notifications/reset-count", { method: "POST" });
+      mutateGlobal("/api/community/notifications?count=true");
     } catch {
-      // silent
+      mutate(previousData, { revalidate: false });
+    }
+  }
+
+  async function handleArchive(id: number) {
+    const previousData = data;
+    mutate(
+      (current) => {
+        if (!current?.records) return current;
+        return {
+          ...current,
+          records: current.records.filter((n: NotificationItem) => n.id !== id),
+        };
+      },
+      { revalidate: false },
+    );
+    try {
+      await fetch(`/api/community/notifications/${id}/archive`, { method: "POST" });
+      mutate();
+      await fetch("/api/community/notifications/reset-count", { method: "POST" });
+      mutateGlobal("/api/community/notifications?count=true");
+      toast.success("Notification archived");
+    } catch {
+      mutate(previousData, { revalidate: false });
+      toast.error("Failed to archive notification");
     }
   }
 
@@ -111,7 +168,7 @@ export default function NotificationsPage() {
                 <div
                   key={notif.id}
                   className={cn(
-                    "flex items-start gap-3 rounded-lg border p-4 transition-colors cursor-pointer hover:bg-muted/50",
+                    "group flex items-start gap-3 rounded-lg border p-4 transition-colors cursor-pointer hover:bg-muted/50",
                     isUnread && "bg-primary/[0.03] border-primary/20",
                   )}
                   onClick={() => {
@@ -144,9 +201,21 @@ export default function NotificationsPage() {
                     </div>
                   </div>
 
-                  {isUnread && (
-                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                  )}
+                  <div className="ml-1 flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleArchive(notif.id);
+                      }}
+                      aria-label="Archive notification"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </Button>
+                    {isUnread && <div className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                  </div>
                 </div>
               );
             })}
