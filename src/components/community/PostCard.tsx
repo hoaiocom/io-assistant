@@ -65,6 +65,15 @@ export interface PostCardData {
   topics?: Array<{ id: number; name: string; slug: string }>;
   first_liked_by?: LikedByMember[];
   hide_meta_info?: boolean;
+  post_follower_id?: number | null;
+  url?: string;
+  policies?: {
+    can_destroy_post?: boolean;
+    can_duplicate_post?: boolean;
+    can_manage_post?: boolean;
+    can_report_post?: boolean;
+    can_update_post?: boolean;
+  };
 }
 
 interface PostCardProps {

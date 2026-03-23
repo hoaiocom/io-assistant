@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
-import { Users, Lock, Globe, Plus, Pin } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Users, Lock, Globe, Plus, Pin, Heart, MessageCircle, MoreHorizontal } from "lucide-react";
 import { PostCard, type PostCardData } from "@/components/community/PostCard";
 import { ImagePostsGrid, type ImageGridPost } from "@/components/community/ImagePostsGrid";
 import { ChatSpaceView } from "@/components/community/ChatSpaceView";
@@ -30,11 +31,215 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 type SpaceTopic = { id: number; name: string; admin_only?: boolean };
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function safeListTimeAgo(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "";
+    return formatDistanceToNow(d, { addSuffix: true });
+  } catch {
+    return "";
+  }
+}
+
+function SpacePostsListRows({
+  posts,
+  spaceId,
+  onLike,
+  onBookmark,
+  onFollowToggle,
+  onDelete,
+}: {
+  posts: PostCardData[];
+  spaceId: string;
+  onLike: (postId: number, liked: boolean) => Promise<void>;
+  onBookmark: (postId: number, bookmarked: boolean) => Promise<void>;
+  onFollowToggle: (postId: number, followerId: number | null) => Promise<void>;
+  onDelete: (postId: number) => Promise<void>;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      {posts.map((post) => {
+        const title = post.display_title || post.name || "Untitled";
+        const author = post.community_member || post.author;
+        const authorName = author?.name || post.user_name || "Unknown";
+        const authorAvatar = author?.avatar_url || post.user_avatar_url;
+        const timeAgo = safeListTimeAgo(post.published_at || post.created_at);
+        const commentCount = post.comment_count ?? post.comments_count ?? 0;
+        const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
+        const isLiked = post.is_liked === true;
+        const href = `/spaces/${spaceId}/posts/${post.id}`;
+        const canDelete = post.policies?.can_destroy_post === true;
+        const canManagePost = post.policies?.can_manage_post === true;
+        const canUpdatePost = post.policies?.can_update_post === true;
+        const isBookmarked = !!post.bookmark_id;
+        const followerId = post.post_follower_id ?? null;
+        const isFollowing = !!followerId;
+        const canShowSettings =
+          canManagePost ||
+          canUpdatePost ||
+          canDelete ||
+          typeof post.post_follower_id !== "undefined" ||
+          typeof post.bookmark_id !== "undefined";
+        return (
+          <div
+            key={post.id}
+            className="border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/35"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex flex-1 items-start gap-3">
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarImage src={authorAvatar || undefined} />
+                  <AvatarFallback className="text-xs">{getInitials(authorName)}</AvatarFallback>
+                </Avatar>
+
+                <div className="min-w-0">
+                  <Link href={href} className="truncate text-[15px] font-semibold leading-tight hover:underline">
+                    {title}
+                  </Link>
+                  <div className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
+                    {authorName}
+                    {timeAgo && <> posted {timeAgo}</>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="shrink-0 pt-0.5">
+                <div className="flex items-center gap-4 text-muted-foreground">
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1 text-xs sm:text-sm hover:text-foreground",
+                      isLiked && "text-red-500 hover:text-red-600",
+                    )}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      try {
+                        await onLike(post.id, !isLiked);
+                      } catch {
+                        toast.error("Failed to update love");
+                      }
+                    }}
+                  >
+                    <Heart className={cn("h-4 w-4", isLiked && "fill-current")} />
+                    <span>{likeCount}</span>
+                  </button>
+                  <span className="inline-flex items-center gap-1 text-xs sm:text-sm">
+                    <MessageCircle className="h-4 w-4" />
+                    <span>{commentCount}</span>
+                  </span>
+                  {canShowSettings && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              await onBookmark(post.id, !isBookmarked);
+                              toast.success(isBookmarked ? "Bookmark removed" : "Post bookmarked");
+                            } catch {
+                              toast.error("Failed to update bookmark");
+                            }
+                          }}
+                        >
+                          {isBookmarked ? "Remove bookmark" : "Bookmark post"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            const shareUrl =
+                              post.url ||
+                              (typeof window !== "undefined"
+                                ? `${window.location.origin}${href}`
+                                : href);
+                            try {
+                              await navigator.clipboard.writeText(shareUrl);
+                              toast.success("Post link copied");
+                            } catch {
+                              toast.error("Unable to copy post link");
+                            }
+                          }}
+                        >
+                          Share post
+                        </DropdownMenuItem>
+                        {canUpdatePost && (
+                          <DropdownMenuItem asChild>
+                            <Link href={href}>Edit post</Link>
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              await onFollowToggle(post.id, followerId);
+                              toast.success(isFollowing ? "Unfollowed post" : "Following post");
+                            } catch {
+                              toast.error("Failed to update follow settings");
+                            }
+                          }}
+                        >
+                          {isFollowing ? "Unfollow post" : "Follow post"}
+                        </DropdownMenuItem>
+                        {canDelete && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={async () => {
+                                try {
+                                  await onDelete(post.id);
+                                } catch {
+                                  toast.error("Failed to delete post");
+                                }
+                              }}
+                            >
+                              Delete post
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function SpaceCoverImage({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
@@ -172,10 +377,39 @@ export default function SpaceDetailPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ record_id: postId, bookmark_type: "Post" }),
         });
+      } else {
+        const targetPost = posts.find((p) => p.id === postId);
+        const bookmarkId = targetPost?.bookmark_id;
+        if (bookmarkId) {
+          await fetch(`/api/community/bookmarks/${bookmarkId}`, { method: "DELETE" });
+        }
       }
       mutate();
     },
+    [mutate, posts],
+  );
+
+  const handleFollowToggle = useCallback(
+    async (postId: number, followerId: number | null) => {
+      const endpoint = followerId
+        ? `/api/community/posts/${postId}/followers/${followerId}`
+        : `/api/community/posts/${postId}/followers`;
+      const method = followerId ? "DELETE" : "POST";
+      const res = await fetch(endpoint, { method });
+      if (!res.ok) throw new Error("Failed to update follow settings");
+      mutate();
+    },
     [mutate],
+  );
+
+  const handleDeletePost = useCallback(
+    async (postId: number) => {
+      const res = await fetch(`/api/community/spaces/${id}/posts/${postId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete post");
+      mutate();
+      toast.success("Post deleted");
+    },
+    [id, mutate],
   );
 
   const handleToggleTopic = useCallback((topicId: number) => {
@@ -553,43 +787,14 @@ export default function SpaceDetailPage() {
                     )}
 
                     {layout === "list" && (
-                      <div className="rounded-xl border bg-card divide-y">
-                        {regularPosts.map((post) => {
-                          const title = post.display_title || post.name || "Untitled";
-                          const author =
-                            post.community_member?.name ||
-                            post.author?.name ||
-                            post.user_name ||
-                            "Unknown";
-                          const commentCount = post.comment_count ?? post.comments_count ?? 0;
-                          const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
-                          const href = `/spaces/${id}/posts/${post.id}`;
-                          return (
-                            <Link
-                              key={post.id}
-                              href={href}
-                              className="block px-4 py-3 hover:bg-muted/40 transition-colors"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="truncate text-[15px] font-semibold">
-                                    {title}
-                                  </div>
-                                  <div className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">
-                                    {author}
-                                  </div>
-                                </div>
-                                <div className="shrink-0 flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                                  {likeCount > 0 && <span>{likeCount} likes</span>}
-                                  {commentCount > 0 && (
-                                    <span>{commentCount} comments</span>
-                                  )}
-                                </div>
-                              </div>
-                            </Link>
-                          );
-                        })}
-                      </div>
+                      <SpacePostsListRows
+                        posts={regularPosts}
+                        spaceId={id}
+                        onLike={handleLike}
+                        onBookmark={handleBookmark}
+                        onFollowToggle={handleFollowToggle}
+                        onDelete={handleDeletePost}
+                      />
                     )}
 
                     {layout === "card" && (
@@ -1019,35 +1224,14 @@ export default function SpaceDetailPage() {
           )}
 
           {layout === "list" && (
-            <div className="rounded-xl border bg-card divide-y">
-              {regularPosts.map((post) => {
-                const title = post.display_title || post.name || "Untitled";
-                const author = post.community_member?.name || post.author?.name || post.user_name || "Unknown";
-                const commentCount = post.comment_count ?? post.comments_count ?? 0;
-                const likeCount = post.user_likes_count ?? post.likes_count ?? 0;
-                const href = `/spaces/${id}/posts/${post.id}`;
-                return (
-                  <Link
-                    key={post.id}
-                    href={href}
-                    className="block px-4 py-3 hover:bg-muted/40 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold">{title}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                          {author}
-                        </div>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2 text-xs text-muted-foreground">
-                        {likeCount > 0 && <span>{likeCount} likes</span>}
-                        {commentCount > 0 && <span>{commentCount} comments</span>}
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <SpacePostsListRows
+              posts={regularPosts}
+              spaceId={id}
+              onLike={handleLike}
+              onBookmark={handleBookmark}
+              onFollowToggle={handleFollowToggle}
+              onDelete={handleDeletePost}
+            />
           )}
 
           {layout === "card" && (

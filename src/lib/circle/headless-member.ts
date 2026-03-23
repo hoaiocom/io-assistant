@@ -112,6 +112,12 @@ export function getPostDetail(token: string, spaceId: number, postId: number) {
   return memberRequest<unknown>(`spaces/${spaceId}/posts/${postId}`, token);
 }
 
+export function deleteMemberPost(token: string, spaceId: number, postId: number) {
+  return memberRequest<unknown>(`spaces/${spaceId}/posts/${postId}`, token, {
+    method: "DELETE",
+  });
+}
+
 export function createMemberPost(
   token: string,
   spaceId: number,

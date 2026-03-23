@@ -115,3 +115,18 @@ in `src/lib/circle/types.ts` (or a focused community types module), then refacto
 - [ ] Visiting a space marks it read (where supported), and sidebar unread state updates.
 - [ ] All new features are backed by server routes under `src/app/api/community/*` and match swagger endpoints.
 
+### Implementation status (latest slice)
+
+- [x] Enhance basic space **List** view to follow Circle-like post-row layout (round avatar, author + posted time line, love and comment counters on the right).  
+  Implemented in: `src/app/community/(main)/spaces/[id]/page.tsx` (`SpacePostsListRows` used for both regular and course discussion list rendering).
+- [x] Add Circle-like post settings menu in List view, filtered by headless post policies so members only see actions they can perform.  
+  Implemented in: `src/app/community/(main)/spaces/[id]/page.tsx` (uses `post.policies.can_destroy_post`, `can_manage_post`, `can_update_post`, plus `bookmark_id` and `post_follower_id` from `GET /spaces/{space_id}/posts`).
+- [x] Add member proxy delete route for post settings action.  
+  Implemented in: `src/app/api/community/spaces/[id]/posts/[postId]/route.ts` (`DELETE`), backed by `src/lib/circle/headless-member.ts` (`deleteMemberPost`).
+- [ ] Add dedicated `/community/spaces` directory page.  
+  Pending: not part of this UI slice.
+- [ ] Add space bookmarks experience (`/spaces/{id}/bookmarks`) in member UI.  
+  Pending: route integration and UI are not implemented yet.
+- [ ] Add space read/unread synchronization (`space_notification_details`, `mark_as_read`) with sidebar indicators.  
+  Pending: requires additional proxy routes + sidebar state wiring.
+

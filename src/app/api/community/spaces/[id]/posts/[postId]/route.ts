@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireMemberAuth } from "@/lib/member-auth";
-import { getPostDetail } from "@/lib/circle/headless-member";
+import { deleteMemberPost, getPostDetail } from "@/lib/circle/headless-member";
 
 export async function GET(
   _req: Request,
@@ -13,6 +13,24 @@ export async function GET(
     return NextResponse.json(data);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch post";
+    if (message === "Unauthorized" || message === "Session expired") {
+      return NextResponse.json({ error: message }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string; postId: string }> },
+) {
+  try {
+    const session = await requireMemberAuth();
+    const { id, postId } = await params;
+    const data = await deleteMemberPost(session.accessToken, Number(id), Number(postId));
+    return NextResponse.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete post";
     if (message === "Unauthorized" || message === "Session expired") {
       return NextResponse.json({ error: message }, { status: 401 });
     }
